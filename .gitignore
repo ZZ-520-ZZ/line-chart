@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+.idea/
+.vscode/
+.pytest_cache/
+.coverage
+htmlcov/
+*.pplot
+*.bak*
+gui_800x600_*.png
