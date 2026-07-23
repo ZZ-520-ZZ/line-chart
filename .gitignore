@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+*.pyd
+.venv/
+venv/
+.vscode/
+.idea/
+*.png
+*.jpg
+*.jpeg
+*.pdf
+*.svg
