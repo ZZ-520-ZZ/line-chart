@@ -5,7 +5,15 @@ from tkinter import scrolledtext
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
-import numpy as np
+from data_io import load_table
+from plot_core import (ChartSpec, CurveSpec, create_annotation,
+                       generate_series_values, parse_axis_limits,
+                       parse_numeric_data, parse_precision,
+                       parse_uncertainty_text, render_chart,
+                       validate_precision_text)
+from project_io import (CurveProject, ProjectState,
+                        load_project as load_project_file,
+                        save_project as save_project_file)
 
 plt.rcParams['font.sans-serif'] = ['SimHei', 'DejaVu Sans']
 plt.rcParams['axes.unicode_minus'] = False
@@ -32,6 +40,13 @@ LATEX_SYMBOLS = {
 MARKERS = ['o', 's', '^', 'D', 'v', '<', '>', 'p', '*', 'h', 'H', '8']
 COLORS = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
           '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf']
+FIT_OPTIONS = {
+    '不拟合': 'none',
+    '线性': 'linear',
+    '二次': 'quadratic',
+    '指数': 'exponential',
+}
+FIT_LABELS = {value: label for label, value in FIT_OPTIONS.items()}
 
 
 class UndoEntry(tk.Entry):
@@ -80,7 +95,7 @@ class PhysicsPlotTool:
     def __init__(self, root):
         self.root = root
         self.root.title("绘图工具1.0")
-        self.root.geometry("1000x700")
+        self.root.geometry("900x620")
         self.root.minsize(800, 600)
 
         self.style = ttk.Style()
@@ -113,23 +128,27 @@ class PhysicsPlotTool:
     def setup_left_panel(self, parent):
         nb = ttk.Notebook(parent)
         nb.pack(fill=tk.BOTH, expand=True)
+        self.notebook = nb
 
         self.tab_basic = ttk.Frame(nb)
         self.tab_axis = ttk.Frame(nb)
         self.tab_data = ttk.Frame(nb)
         self.tab_series = ttk.Frame(nb)
+        self.tab_fit = ttk.Frame(nb)
         self.tab_about = ttk.Frame(nb)
 
-        nb.add(self.tab_basic, text='基本设置')
-        nb.add(self.tab_axis, text='坐标轴设置')
-        nb.add(self.tab_data, text='数据输入')
-        nb.add(self.tab_series, text='数列生成')
+        nb.add(self.tab_basic, text='基本')
+        nb.add(self.tab_axis, text='坐标')
+        nb.add(self.tab_data, text='数据')
+        nb.add(self.tab_series, text='数列')
+        nb.add(self.tab_fit, text='拟合')
         nb.add(self.tab_about, text='关于')
 
         self.setup_basic_tab()
         self.setup_axis_tab()
         self.setup_data_tab()
         self.setup_series_tab()
+        self.setup_fit_tab()
         self.setup_about_tab()
 
     def setup_basic_tab(self):
@@ -146,8 +165,9 @@ class PhysicsPlotTool:
 
         ttk.Label(self.tab_basic, text="图表说明:", font=('Arial', 10, 'bold')).pack(
             anchor=tk.W, padx=10, pady=(10, 5))
-        self.note_text = scrolledtext.ScrolledText(self.tab_basic, width=40, height=4, font=('Arial', 10))
+        self.note_text = scrolledtext.ScrolledText(self.tab_basic, width=40, height=3, font=('Arial', 10))
         self.note_text.pack(fill=tk.X, padx=10, pady=(0, 10))
+        add_undo_support(self.note_text)
 
         ttk.Label(self.tab_basic, text="显示网格:", font=('Arial', 10)).pack(anchor=tk.W, padx=10, pady=(10, 5))
         self.grid_var = tk.BooleanVar(value=True)
@@ -160,8 +180,12 @@ class PhysicsPlotTool:
         ttk.Label(self.tab_basic, text="数值精度:", font=('Arial', 10)).pack(anchor=tk.W, padx=10, pady=(10, 5))
         precision_frame = ttk.Frame(self.tab_basic)
         precision_frame.pack(fill=tk.X, padx=10)
-        self.precision_var = tk.IntVar(value=1)
-        ttk.Spinbox(precision_frame, from_=0, to=10, textvariable=self.precision_var, width=8).pack(side=tk.LEFT)
+        self.precision_var = tk.StringVar(value='1')
+        precision_validation = (self.root.register(validate_precision_text), '%P')
+        self.precision_spinbox = ttk.Spinbox(
+            precision_frame, from_=0, to=10, textvariable=self.precision_var,
+            width=8, validate='key', validatecommand=precision_validation)
+        self.precision_spinbox.pack(side=tk.LEFT)
         ttk.Label(precision_frame, text="位小数").pack(side=tk.LEFT, padx=5)
 
     def setup_axis_tab(self):
@@ -232,13 +256,19 @@ class PhysicsPlotTool:
         ttk.Radiobutton(y_frame, text="向内", variable=self.y_tick_dir, value='in').grid(row=3, column=1, sticky=tk.E)
 
     def setup_data_tab(self):
-        x_data_frame = ttk.LabelFrame(self.tab_data, text="X轴数据", padding=10)
-        x_data_frame.pack(fill=tk.X, padx=10, pady=10)
+        x_data_frame = ttk.LabelFrame(self.tab_data, text="X轴数据", padding=6)
+        x_data_frame.pack(fill=tk.X, padx=8, pady=6)
 
-        ttk.Label(x_data_frame, text="数据值(逗号分隔):", font=('Arial', 10)).pack(anchor=tk.W, pady=5)
-        self.x_data_entry = scrolledtext.ScrolledText(x_data_frame, width=40, height=4, font=('Arial', 10))
-        self.x_data_entry.pack(fill=tk.X, pady=(0, 5))
+        ttk.Label(x_data_frame, text="数据值（逗号分隔）:", font=('Arial', 9)).pack(anchor=tk.W, pady=(0, 2))
+        self.x_data_entry = scrolledtext.ScrolledText(x_data_frame, width=40, height=3, font=('Arial', 9))
+        self.x_data_entry.pack(fill=tk.X, pady=(0, 3))
         add_undo_support(self.x_data_entry)
+
+        x_uncertainty_row = ttk.Frame(x_data_frame)
+        x_uncertainty_row.pack(fill=tk.X, pady=(0, 3))
+        ttk.Label(x_uncertainty_row, text="X不确定度（单值/列表）:", font=('Arial', 9)).pack(side=tk.LEFT)
+        self.x_uncertainty_entry = UndoEntry(x_uncertainty_row, width=16, font=('Arial', 9))
+        self.x_uncertainty_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(4, 0))
 
         x_button_frame = ttk.Frame(x_data_frame)
         x_button_frame.pack(fill=tk.X)
@@ -248,12 +278,12 @@ class PhysicsPlotTool:
                    width=12).pack(side=tk.RIGHT, padx=5)
 
         curves_header = ttk.Frame(self.tab_data)
-        curves_header.pack(fill=tk.X, padx=10, pady=(10, 5))
+        curves_header.pack(fill=tk.X, padx=8, pady=(4, 3))
         ttk.Label(curves_header, text="Y轴曲线（可添加多个）", font=('Arial', 10, 'bold')).pack(side=tk.LEFT)
         ttk.Button(curves_header, text="+ 添加曲线", command=self.add_curve, width=10).pack(side=tk.RIGHT)
 
         self.curves_container = ttk.Frame(self.tab_data)
-        self.curves_container.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 10))
+        self.curves_container.pack(fill=tk.BOTH, expand=True, padx=8, pady=(0, 6))
 
         self.data_canvas = tk.Canvas(self.curves_container, highlightthickness=0)
         self.data_scrollbar = ttk.Scrollbar(self.curves_container, orient="vertical", command=self.data_canvas.yview)
@@ -261,14 +291,28 @@ class PhysicsPlotTool:
 
         self.data_scroll_frame.bind("<Configure>",
                                     lambda e: self.data_canvas.configure(scrollregion=self.data_canvas.bbox("all")))
-        self.data_canvas.create_window((0, 0), window=self.data_scroll_frame, anchor="nw", width=380)
+        self.data_window = self.data_canvas.create_window(
+            (0, 0), window=self.data_scroll_frame, anchor="nw")
+        self.data_canvas.bind(
+            "<Configure>",
+            lambda event: self.data_canvas.itemconfigure(self.data_window, width=event.width))
         self.data_canvas.configure(yscrollcommand=self.data_scrollbar.set)
 
         def on_data_mousewheel(event):
-            self.data_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+            widget = event.widget
+            inside_data_panel = False
+            while widget is not None:
+                if widget == self.curves_container:
+                    inside_data_panel = True
+                    break
+                widget = getattr(widget, 'master', None)
+            if not inside_data_panel or isinstance(event.widget, tk.Text) or event.delta == 0:
+                return None
+            direction = -1 if event.delta > 0 else 1
+            self.data_canvas.yview_scroll(direction, "units")
+            return "break"
 
-        self.data_canvas.bind("<Enter>", lambda e: self.data_canvas.bind_all("<MouseWheel>", on_data_mousewheel))
-        self.data_canvas.bind("<Leave>", lambda e: self.data_canvas.unbind_all("<MouseWheel>"))
+        self.root.bind("<MouseWheel>", on_data_mousewheel, add='+')
 
         self.data_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         self.data_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
@@ -305,13 +349,13 @@ class PhysicsPlotTool:
         target_frame.pack(fill=tk.X, padx=10, pady=10)
 
         self.target_var = tk.StringVar(value="x")
+        self.target_curve_ids = []
         ttk.Radiobutton(target_frame, text="X轴数据", variable=self.target_var, value="x").pack(side=tk.LEFT, padx=10)
 
         self.target_combo = ttk.Combobox(target_frame, state='readonly', width=15)
         self.target_combo.pack(side=tk.LEFT, padx=5)
         self.target_combo.bind("<<ComboboxSelected>>", self.on_target_combo_change)
-        self.target_combo['values'] = ["Y轴曲线1", "Y轴曲线2"]
-        self.target_combo.current(0)
+        self.target_combo['values'] = []
 
         button_frame = ttk.Frame(params_frame)
         button_frame.pack(fill=tk.X, pady=10)
@@ -326,6 +370,42 @@ class PhysicsPlotTool:
         self.style.map('Accent.TButton',
                        background=[('active', '#1a73e8'), ('pressed', '#1557b0')],
                        foreground=[('active', 'white'), ('pressed', 'white')])
+
+    def setup_fit_tab(self):
+        toolbar = ttk.Frame(self.tab_fit)
+        toolbar.pack(fill=tk.X, padx=8, pady=8)
+        ttk.Label(toolbar, text="拟合参数与质量", font=('Arial', 10, 'bold')).pack(side=tk.LEFT)
+        ttk.Button(toolbar, text="复制", command=self.copy_fit_results, width=7).pack(side=tk.RIGHT)
+        self.fit_result_text = scrolledtext.ScrolledText(
+            self.tab_fit, width=40, height=18, font=('Consolas', 10), wrap=tk.WORD)
+        self.fit_result_text.pack(fill=tk.BOTH, expand=True, padx=8, pady=(0, 8))
+        self.fit_result_text.insert('1.0', "绘制并选择拟合方式后，参数将显示在这里。")
+        self.fit_result_text.config(state=tk.DISABLED)
+
+    def copy_fit_results(self):
+        text = self.fit_result_text.get('1.0', tk.END).strip()
+        self.root.clipboard_clear()
+        self.root.clipboard_append(text)
+
+    def show_fit_results(self, fit_results):
+        if fit_results:
+            blocks = []
+            for result in fit_results:
+                blocks.append(
+                    f"{result.curve_label} - {FIT_LABELS.get(result.fit_type, result.fit_type)}拟合\n"
+                    f"方程: {result.equation}\n"
+                    f"R² = {result.r_squared:.6f}\n"
+                    f"相关系数 r = {result.correlation:.6f}")
+            text = "\n\n".join(blocks)
+        else:
+            text = "当前曲线未选择拟合方式。"
+        self.fit_result_text.config(state=tk.NORMAL)
+        self.fit_result_text.delete('1.0', tk.END)
+        self.fit_result_text.insert('1.0', text)
+        self.fit_result_text.config(state=tk.DISABLED)
+
+    def clear_fit_results(self):
+        self.show_fit_results(())
 
     def setup_about_tab(self):
         about_frame = ttk.Frame(self.tab_about)
@@ -368,17 +448,24 @@ class PhysicsPlotTool:
         messagebox.showinfo("提示", "QQ号已复制到剪贴板")
 
     def refresh_target_combo(self):
-        options = []
-        for i, curve in enumerate(self.curves):
-            options.append(f"Y轴曲线{i + 1}")
+        options = [f"Y轴曲线{i + 1}" for i in range(len(self.curves))]
+        self.target_curve_ids = [curve['id'] for curve in self.curves]
         self.target_combo['values'] = options
-        if options:
-            self.target_combo.current(0)
+        target = self.target_var.get()
+        if target.startswith("y:"):
+            try:
+                curve_id = int(target.split(":", 1)[1])
+                self.target_combo.current(self.target_curve_ids.index(curve_id))
+                return
+            except (ValueError, IndexError):
+                pass
+        self.target_var.set("x")
+        self.target_combo.set("")
 
     def on_target_combo_change(self, event=None):
         idx = self.target_combo.current()
-        if idx >= 0:
-            self.target_var.set(f"y{idx}")
+        if 0 <= idx < len(self.target_curve_ids):
+            self.target_var.set(f"y:{self.target_curve_ids[idx]}")
             self.target_combo.selection_clear()
 
     def add_curve(self):
@@ -393,14 +480,14 @@ class PhysicsPlotTool:
         color = COLORS[idx % len(COLORS)]
         marker = MARKERS[idx % len(MARKERS)]
 
-        curve_frame = ttk.LabelFrame(self.data_scroll_frame, text=f"曲线 {idx + 1}", padding=8)
-        curve_frame.pack(fill=tk.X, pady=5)
+        curve_frame = ttk.LabelFrame(self.data_scroll_frame, text=f"曲线 {idx + 1}", padding=6)
+        curve_frame.pack(fill=tk.X, pady=3)
 
         header_row = ttk.Frame(curve_frame)
         header_row.pack(fill=tk.X, pady=(0, 5))
 
-        ttk.Label(header_row, text="图例标签:", font=('Arial', 10)).pack(side=tk.LEFT)
-        legend_entry = UndoEntry(header_row, width=12, font=('Arial', 10))
+        ttk.Label(header_row, text="图例:", font=('Arial', 9)).pack(side=tk.LEFT)
+        legend_entry = UndoEntry(header_row, width=9, font=('Arial', 9))
         legend_entry.insert(0, f'数据集{idx + 1}')
         legend_entry.pack(side=tk.LEFT, padx=3)
         ttk.Button(header_row, text="符",
@@ -414,23 +501,34 @@ class PhysicsPlotTool:
             if c:
                 var.set(c)
 
-        ttk.Button(header_row, text="颜色", command=choose_curve_color, width=5).pack(side=tk.LEFT, padx=3)
+        ttk.Button(header_row, text="颜色", command=choose_curve_color, width=4).pack(side=tk.LEFT, padx=2)
 
         show_var = tk.BooleanVar(value=True)
-        ttk.Checkbutton(header_row, variable=show_var, text="显示").pack(side=tk.LEFT, padx=5)
+        ttk.Checkbutton(header_row, variable=show_var, text="显示").pack(side=tk.LEFT, padx=2)
 
         def remove_curve(frm=curve_frame, cid=curve_id):
             self.remove_curve_by_id(cid)
 
-        ttk.Button(header_row, text="删除", command=remove_curve, width=5).pack(side=tk.RIGHT)
-
-        ttk.Label(curve_frame, text="数据值(逗号分隔):", font=('Arial', 10)).pack(anchor=tk.W, pady=(3, 2))
-        data_entry = scrolledtext.ScrolledText(curve_frame, width=40, height=3, font=('Arial', 10))
+        ttk.Label(curve_frame, text="数据值（逗号分隔）:", font=('Arial', 9)).pack(anchor=tk.W, pady=(2, 1))
+        data_entry = scrolledtext.ScrolledText(curve_frame, width=40, height=2, font=('Arial', 9))
         data_entry.pack(fill=tk.X, pady=(0, 3))
         add_undo_support(data_entry)
 
+        analysis_row = ttk.Frame(curve_frame)
+        analysis_row.pack(fill=tk.X, pady=(0, 3))
+        ttk.Label(analysis_row, text="Y不确定度:", font=('Arial', 9)).pack(side=tk.LEFT)
+        uncertainty_entry = UndoEntry(analysis_row, width=11, font=('Arial', 9))
+        uncertainty_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(3, 8))
+        ttk.Label(analysis_row, text="拟合:", font=('Arial', 9)).pack(side=tk.LEFT)
+        fit_var = tk.StringVar(value='不拟合')
+        fit_combo = ttk.Combobox(
+            analysis_row, textvariable=fit_var,
+            values=list(FIT_OPTIONS), state='readonly', width=7)
+        fit_combo.pack(side=tk.LEFT, padx=(3, 0))
+
         btn_row = ttk.Frame(curve_frame)
         btn_row.pack(fill=tk.X)
+        ttk.Button(btn_row, text="删除", command=remove_curve, width=6).pack(side=tk.LEFT)
         ttk.Button(btn_row, text="清除",
                    command=lambda e=data_entry: e.delete(1.0, tk.END),
                    width=6).pack(side=tk.RIGHT)
@@ -443,6 +541,8 @@ class PhysicsPlotTool:
             'frame': curve_frame,
             'legend_entry': legend_entry,
             'data_entry': data_entry,
+            'uncertainty_entry': uncertainty_entry,
+            'fit_var': fit_var,
             'color_var': color_var,
             'show_var': show_var,
             'marker': marker,
@@ -465,32 +565,203 @@ class PhysicsPlotTool:
 
         for i, curve in enumerate(self.curves):
             curve['frame'].config(text=f"曲线 {i + 1}")
-            curve['legend_entry'].delete(0, tk.END)
-            curve['legend_entry'].insert(0, f'数据集{i + 1}')
 
         self.refresh_target_combo()
 
     def setup_right_panel(self, parent):
         canvas_frame = ttk.LabelFrame(parent, text="图表预览", padding=5)
-        canvas_frame.pack(fill=tk.BOTH, expand=True)
 
         self.canvas = FigureCanvasTkAgg(self.fig, master=canvas_frame)
-        self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+        canvas_widget = self.canvas.get_tk_widget()
+        canvas_widget.pack(fill=tk.BOTH, expand=True)
+        canvas_widget.bind('<Configure>', self.sync_figure_size, add='+')
 
         self.canvas.mpl_connect('motion_notify_event', self.on_hover)
-        self.annotation = self.ax.annotate("", xy=(0, 0), xytext=(20, 20),
-                                           textcoords="offset points",
-                                           bbox=dict(boxstyle="round", fc="w"),
-                                           arrowprops=dict(arrowstyle="->"))
-        self.annotation.set_visible(False)
+        self.create_annotation()
 
         button_frame = ttk.Frame(parent)
-        button_frame.pack(fill=tk.X, padx=5, pady=5)
+        button_frame.pack(side=tk.BOTTOM, fill=tk.X, padx=3, pady=(2, 0))
+        for column in range(3):
+            button_frame.columnconfigure(column, weight=1, uniform='commands')
 
-        ttk.Button(button_frame, text="绘制图表", command=self.plot_graph,
-                   style='Accent.TButton').pack(side=tk.LEFT, expand=True, padx=5)
-        ttk.Button(button_frame, text="清除图表", command=self.clear_plot).pack(side=tk.LEFT, expand=True, padx=5)
-        ttk.Button(button_frame, text="保存图表", command=self.save_plot).pack(side=tk.LEFT, expand=True, padx=5)
+        commands = [
+            ("绘制图表", self.plot_graph, 'Accent.TButton'),
+            ("清空图表", self.clear_plot, None),
+            ("导出图片", self.save_plot, None),
+            ("导入表格", self.import_table, None),
+            ("打开工程", self.open_project, None),
+            ("保存工程", self.save_project, None),
+        ]
+        self.command_buttons = []
+        for index, (text, command, style) in enumerate(commands):
+            options = {'text': text, 'command': command}
+            if style:
+                options['style'] = style
+            button = ttk.Button(button_frame, **options)
+            button.grid(row=index // 3, column=index % 3, sticky='ew', padx=2, pady=1)
+            self.command_buttons.append(button)
+        canvas_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+
+    def sync_figure_size(self, event):
+        self.root.after_idle(self.apply_canvas_size)
+
+    def apply_canvas_size(self):
+        canvas_widget = self.canvas.get_tk_widget()
+        width = canvas_widget.winfo_width()
+        height = canvas_widget.winfo_height()
+        if width < 100 or height < 100:
+            return
+        figure_width, figure_height = self.fig.get_size_inches() * self.fig.dpi
+        if abs(figure_width - width) <= 2 and abs(figure_height - height) <= 2:
+            return
+        self.fig.set_size_inches(
+            width / self.fig.dpi,
+            height / self.fig.dpi,
+            forward=False)
+        self.canvas.draw_idle()
+
+    @staticmethod
+    def set_entry(entry, value):
+        entry.delete(0, tk.END)
+        entry.insert(0, str(value))
+
+    @staticmethod
+    def set_text(text_widget, value):
+        text_widget.delete('1.0', tk.END)
+        text_widget.insert('1.0', str(value))
+
+    @staticmethod
+    def format_values(values):
+        return ','.join(f'{value:.12g}' for value in values)
+
+    def resize_curves(self, target_count):
+        if not 1 <= target_count <= 10:
+            raise ValueError("曲线数量必须在1到10之间")
+        while len(self.curves) < target_count:
+            self.add_curve()
+        while len(self.curves) > target_count:
+            curve = self.curves.pop()
+            curve['frame'].destroy()
+            self.curve_frames.pop()
+        for index, curve in enumerate(self.curves):
+            curve['frame'].config(text=f"曲线 {index + 1}")
+        self.refresh_target_combo()
+
+    def import_table(self):
+        file_path = filedialog.askopenfilename(
+            title="导入实验数据",
+            filetypes=[("表格文件", "*.csv *.xlsx *.xlsm"),
+                       ("CSV文件", "*.csv"),
+                       ("Excel文件", "*.xlsx *.xlsm")])
+        if not file_path:
+            return
+        try:
+            table = load_table(file_path)
+            self.resize_curves(len(table.series))
+        except (OSError, ValueError) as exc:
+            messagebox.showerror("导入失败", str(exc))
+            return
+
+        self.set_text(self.x_data_entry, self.format_values(table.x_values))
+        self.set_entry(self.x_label_entry, table.x_label)
+        self.set_entry(self.x_uncertainty_entry, '')
+        for curve, imported in zip(self.curves, table.series):
+            self.set_entry(curve['legend_entry'], imported.label)
+            self.set_text(curve['data_entry'], self.format_values(imported.values))
+            self.set_entry(curve['uncertainty_entry'], '')
+            curve['fit_var'].set('不拟合')
+            curve['show_var'].set(True)
+        messagebox.showinfo("导入完成", f"已导入{len(table.x_values)}个数据点和{len(table.series)}条曲线")
+
+    def collect_project_state(self):
+        return ProjectState(
+            title=self.title_entry.get(),
+            note=self.note_text.get('1.0', tk.END).strip(),
+            x_label=self.x_label_entry.get(),
+            x_unit=self.x_unit_entry.get(),
+            y_label=self.y_label_entry.get(),
+            y_unit=self.y_unit_entry.get(),
+            x_data=self.x_data_entry.get('1.0', tk.END).strip(),
+            x_uncertainty=self.x_uncertainty_entry.get(),
+            x_min=self.x_min_entry.get(),
+            x_max=self.x_max_entry.get(),
+            y_min=self.y_min_entry.get(),
+            y_max=self.y_max_entry.get(),
+            x_tick_direction=self.x_tick_dir.get(),
+            y_tick_direction=self.y_tick_dir.get(),
+            show_grid=self.grid_var.get(),
+            show_legend=self.legend_var.get(),
+            precision=self.precision_var.get(),
+            curves=tuple(CurveProject(
+                label=curve['legend_entry'].get(),
+                data=curve['data_entry'].get('1.0', tk.END).strip(),
+                uncertainty=curve['uncertainty_entry'].get(),
+                color=curve['color_var'].get(),
+                visible=curve['show_var'].get(),
+                marker=curve['marker'],
+                fit_type=FIT_OPTIONS.get(curve['fit_var'].get(), 'none'))
+                for curve in self.curves))
+
+    def apply_project_state(self, state):
+        self.resize_curves(max(1, len(state.curves)))
+        for entry, value in (
+                (self.title_entry, state.title),
+                (self.x_label_entry, state.x_label),
+                (self.x_unit_entry, state.x_unit),
+                (self.y_label_entry, state.y_label),
+                (self.y_unit_entry, state.y_unit),
+                (self.x_uncertainty_entry, state.x_uncertainty),
+                (self.x_min_entry, state.x_min),
+                (self.x_max_entry, state.x_max),
+                (self.y_min_entry, state.y_min),
+                (self.y_max_entry, state.y_max)):
+            self.set_entry(entry, value)
+        self.set_text(self.note_text, state.note)
+        self.set_text(self.x_data_entry, state.x_data)
+        self.x_tick_dir.set(state.x_tick_direction)
+        self.y_tick_dir.set(state.y_tick_direction)
+        self.grid_var.set(state.show_grid)
+        self.legend_var.set(state.show_legend)
+        self.precision_var.set(state.precision)
+
+        for curve, saved in zip(self.curves, state.curves):
+            self.set_entry(curve['legend_entry'], saved.label)
+            self.set_text(curve['data_entry'], saved.data)
+            self.set_entry(curve['uncertainty_entry'], saved.uncertainty)
+            curve['color_var'].set(saved.color)
+            curve['show_var'].set(saved.visible)
+            curve['marker'] = saved.marker
+            curve['fit_var'].set(FIT_LABELS.get(saved.fit_type, '不拟合'))
+        self.clear_fit_results()
+
+    def save_project(self):
+        file_path = filedialog.asksaveasfilename(
+            title="保存工程", defaultextension=".pplot",
+            filetypes=[("物理绘图工程", "*.pplot")])
+        if not file_path:
+            return
+        try:
+            save_project_file(file_path, self.collect_project_state())
+        except (OSError, TypeError, ValueError) as exc:
+            messagebox.showerror("保存失败", f"工程保存失败：{exc}")
+            return
+        messagebox.showinfo("保存成功", "工程已保存")
+
+    def open_project(self):
+        file_path = filedialog.askopenfilename(
+            title="打开工程", filetypes=[("物理绘图工程", "*.pplot")])
+        if not file_path:
+            return
+        try:
+            state = load_project_file(file_path)
+            self.apply_project_state(state)
+        except (OSError, ValueError) as exc:
+            messagebox.showerror("打开失败", str(exc))
+            return
+        messagebox.showinfo("打开成功", "工程已恢复")
+
+    def create_annotation(self):
+        self.annotation = create_annotation(self.ax)
 
     def open_symbol_window(self, target_entry):
         symbol_window = tk.Toplevel(self.root)
@@ -528,10 +799,13 @@ class PhysicsPlotTool:
         canvas.configure(yscrollcommand=scrollbar.set)
 
         def on_mousewheel(event):
-            canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+            if event.delta == 0:
+                return None
+            direction = -1 if event.delta > 0 else 1
+            canvas.yview_scroll(direction, "units")
+            return "break"
 
-        canvas.bind("<Enter>", lambda e: canvas.bind_all("<MouseWheel>", on_mousewheel))
-        canvas.bind("<Leave>", lambda e: canvas.unbind_all("<MouseWheel>"))
+        symbol_window.bind("<MouseWheel>", on_mousewheel, add='+')
 
         scroll_up_btn = ttk.Button(container, text="▲", width=3,
                                    command=lambda: canvas.yview_scroll(-1, "units"))
@@ -568,7 +842,6 @@ class PhysicsPlotTool:
         self.symbol_category.trace_add('write', refresh_symbols)
 
         def insert_symbol(symbol):
-            canvas.unbind_all("<MouseWheel>")
             if self.symbol_mode.get() == 'latex' and symbol in LATEX_SYMBOLS:
                 target_entry.insert(tk.END, LATEX_SYMBOLS[symbol])
             else:
@@ -576,7 +849,6 @@ class PhysicsPlotTool:
             symbol_window.destroy()
 
         def on_window_close():
-            canvas.unbind_all("<MouseWheel>")
             symbol_window.destroy()
 
         symbol_window.protocol("WM_DELETE_WINDOW", on_window_close)
@@ -587,30 +859,9 @@ class PhysicsPlotTool:
         try:
             start = float(self.start_entry.get())
             end = float(self.end_entry.get())
-
-            if self.series_var.get() == "arithmetic":
-                step = float(self.step_entry.get())
-                data = np.arange(start, end + step / 2, step).tolist()
-            else:
-                ratio = float(self.step_entry.get())
-                data = []
-                current = start
-                if ratio > 1:
-                    while current <= end + 0.0001:
-                        data.append(current)
-                        current *= ratio
-                elif ratio < 1:
-                    while current >= end - 0.0001:
-                        data.append(current)
-                        current *= ratio
-                else:
-                    data = [start]
-
-            if len(data) > 1000:
-                messagebox.showerror("错误", "生成的数据点过多，请调整参数")
-                return
-
-            precision = self.precision_var.get()
+            step_or_ratio = float(self.step_entry.get())
+            data = generate_series_values(self.series_var.get(), start, end, step_or_ratio)
+            precision = self.get_precision()
             data_str = ','.join([f'{x:.{precision}f}' for x in data])
 
             self.preview_text.delete(1.0, tk.END)
@@ -621,14 +872,19 @@ class PhysicsPlotTool:
             if target == "x":
                 self.x_data_entry.delete(1.0, tk.END)
                 self.x_data_entry.insert(1.0, data_str)
-            elif target.startswith("y"):
-                idx = int(target[1:])
-                if 0 <= idx < len(self.curves):
-                    self.curves[idx]['data_entry'].delete(1.0, tk.END)
-                    self.curves[idx]['data_entry'].insert(1.0, data_str)
+            elif target.startswith("y:"):
+                curve_id = int(target.split(":", 1)[1])
+                curve = next((item for item in self.curves if item['id'] == curve_id), None)
+                if curve is None:
+                    raise ValueError("目标曲线已不存在，请重新选择")
+                curve['data_entry'].delete(1.0, tk.END)
+                curve['data_entry'].insert(1.0, data_str)
 
-        except ValueError as e:
+        except (ValueError, OverflowError, tk.TclError) as e:
             messagebox.showerror("错误", f"请输入有效的数字：{str(e)}")
+
+    def get_precision(self):
+        return parse_precision(self.precision_var.get())
 
     def import_x_from_series(self):
         self.target_var.set("x")
@@ -637,7 +893,7 @@ class PhysicsPlotTool:
     def import_y_from_series(self, curve_id):
         for i, curve in enumerate(self.curves):
             if curve['id'] == curve_id:
-                self.target_var.set(f"y{i}")
+                self.target_var.set(f"y:{curve_id}")
                 self.target_combo.current(i)
                 self.generate_series()
                 break
@@ -647,25 +903,31 @@ class PhysicsPlotTool:
             for line in self.ax.lines:
                 contains, info = line.contains(event)
                 if contains:
-                    x, y = event.xdata, event.ydata
+                    indices = info.get('ind', [])
+                    if not indices:
+                        continue
+                    point_index = indices[0]
+                    x_values, y_values = line.get_data()
+                    x = float(x_values[point_index])
+                    y = float(y_values[point_index])
                     self.annotation.xy = (x, y)
-                    precision = self.precision_var.get()
+                    try:
+                        precision = self.get_precision()
+                    except (ValueError, tk.TclError):
+                        precision = 1
                     text = f"({x:.{precision}f}, {y:.{precision}f})"
                     self.annotation.set_text(text)
                     self.annotation.set_visible(True)
-                    self.canvas.draw()
+                    self.canvas.draw_idle()
                     return
         self.annotation.set_visible(False)
-        self.canvas.draw()
+        self.canvas.draw_idle()
 
     def parse_data(self, data_str):
-        data_str = data_str.replace('，', ',').strip()
-        if not data_str:
-            return []
         try:
-            return [float(x.strip()) for x in data_str.split(',')]
-        except ValueError:
-            messagebox.showerror("错误", "数据格式错误，请输入数字并用逗号分隔")
+            return parse_numeric_data(data_str)
+        except ValueError as exc:
+            messagebox.showerror("错误", str(exc))
             return None
 
     def plot_graph(self):
@@ -674,6 +936,7 @@ class PhysicsPlotTool:
         y_label = self.y_label_entry.get()
         x_unit = self.x_unit_entry.get()
         y_unit = self.y_unit_entry.get()
+        note = self.note_text.get("1.0", tk.END).strip()
 
         x_data_str = self.x_data_entry.get("1.0", tk.END).strip()
 
@@ -697,72 +960,68 @@ class PhysicsPlotTool:
                     messagebox.showerror("错误",
                                          f"X轴和{legend}数据长度不一致：X有{len(x_data)}个，{legend}有{len(y_data)}个")
                     return
-                active_curves.append((curve, y_data))
+                try:
+                    y_errors = parse_uncertainty_text(
+                        curve['uncertainty_entry'].get(), len(x_data),
+                        f"{curve['legend_entry'].get().strip() or '数据集'}的Y不确定度")
+                except ValueError as exc:
+                    messagebox.showerror("错误", str(exc))
+                    return
+                active_curves.append(CurveSpec(
+                    values=y_data,
+                    label=curve['legend_entry'].get().strip() or '数据集',
+                    color=curve['color_var'].get(),
+                    marker=curve['marker'],
+                    errors=y_errors,
+                    fit_type=FIT_OPTIONS.get(curve['fit_var'].get(), 'none')))
 
         if not active_curves:
             messagebox.showerror("错误", "请至少填写一条Y轴曲线数据并确保其显示状态为开启")
             return
 
-        self.ax.clear()
+        try:
+            precision = self.get_precision()
+            x_errors = parse_uncertainty_text(
+                self.x_uncertainty_entry.get(), len(x_data), "X不确定度")
+            x_limits = parse_axis_limits(
+                self.x_min_entry.get(), self.x_max_entry.get(), "X轴")
+            y_limits = parse_axis_limits(
+                self.y_min_entry.get(), self.y_max_entry.get(), "Y轴")
+        except (ValueError, tk.TclError) as exc:
+            messagebox.showerror("错误", str(exc))
+            return
 
-        precision = self.precision_var.get()
-
-        jitter_offset = 0.015
-        curve_offsets = []
-
-        for idx, (curve, y_data) in enumerate(active_curves):
-            y_jittered = np.array(y_data) + (idx * jitter_offset)
-            curve_offsets.append(idx * jitter_offset)
-            color = curve['color_var'].get()
-            legend = curve['legend_entry'].get().strip() or '数据集'
-            marker = curve['marker']
-            self.ax.plot(x_data, y_jittered, marker=marker, linestyle='-', color=color,
-                         linewidth=2, markersize=8, label=legend, clip_on=False)
-
-        full_x_label = f"{x_label} ({x_unit})" if x_unit else x_label
-        full_y_label = f"{y_label} ({y_unit})" if y_unit else y_label
-
-        self.ax.set_title(title, fontsize=14, pad=20)
-        self.ax.set_xlabel(full_x_label, fontsize=12, labelpad=10)
-        self.ax.set_ylabel(full_y_label, fontsize=12, labelpad=10)
-
-        x_min = self.x_min_entry.get().strip()
-        x_max = self.x_max_entry.get().strip()
-        y_min = self.y_min_entry.get().strip()
-        y_max = self.y_max_entry.get().strip()
-
-        if x_min and x_max:
-            try:
-                self.ax.set_xlim(float(x_min), float(x_max))
-            except ValueError:
-                pass
-
-        if y_min and y_max:
-            try:
-                self.ax.set_ylim(float(y_min), float(y_max))
-            except ValueError:
-                pass
-
-        self.ax.tick_params(axis='x', direction=self.x_tick_dir.get())
-        self.ax.tick_params(axis='y', direction=self.y_tick_dir.get())
-
-        self.ax.spines['top'].set_visible(False)
-        self.ax.spines['right'].set_visible(False)
-
-        if self.grid_var.get():
-            self.ax.grid(True, linestyle='--', alpha=0.7)
-
-        if self.legend_var.get():
-            self.ax.legend(fontsize=10)
-
-        self.ax.ticklabel_format(useOffset=False)
-        self.ax.xaxis.set_major_formatter(lambda x, pos: f'{x:.{precision}f}')
-        self.ax.yaxis.set_major_formatter(lambda x, pos: f'{x:.{precision}f}')
-
+        spec = ChartSpec(
+            x_values=x_data,
+            curves=active_curves,
+            x_errors=x_errors,
+            title=title,
+            note=note,
+            x_label=x_label,
+            y_label=y_label,
+            x_unit=x_unit,
+            y_unit=y_unit,
+            x_limits=x_limits,
+            y_limits=y_limits,
+            x_tick_direction=self.x_tick_dir.get(),
+            y_tick_direction=self.y_tick_dir.get(),
+            precision=precision,
+            show_grid=self.grid_var.get(),
+            show_legend=self.legend_var.get())
+        try:
+            self.apply_canvas_size()
+            render_result = render_chart(self.ax, spec)
+        except ValueError as exc:
+            messagebox.showerror("拟合或绘图错误", str(exc))
+            return
+        self.annotation = render_result.annotation
+        self.show_fit_results(render_result.fit_results)
         self.canvas.draw()
 
     def clear_plot(self):
         self.ax.clear()
+        self.create_annotation()
+        self.clear_fit_results()
         self.canvas.draw()
 
     def save_plot(self):
@@ -771,9 +1030,14 @@ class PhysicsPlotTool:
                                                             ("JPEG图片", "*.jpg"),
                                                             ("PDF文档", "*.pdf"),
                                                             ("SVG图片", "*.svg")])
-        if file_path:
+        if not file_path:
+            return
+        try:
             self.fig.savefig(file_path, dpi=150, bbox_inches='tight')
-            messagebox.showinfo("成功", "图表已保存")
+        except Exception as exc:
+            messagebox.showerror("保存失败", f"图表保存失败：{exc}")
+            return
+        messagebox.showinfo("成功", "图表已保存")
 
 
 if __name__ == "__main__":
