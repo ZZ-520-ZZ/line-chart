@@ -6,13 +6,13 @@
 
 <p align="center">面向物理实验的数据绘图、误差分析与曲线拟合工具</p>
 
-[![CI](https://github.com/ZZ-520-ZZ/line-chart/actions/workflows/ci.yml/badge.svg)](https://github.com/ZZ-520-ZZ/line-chart/actions/workflows/ci.yml)
+[![CI](https://github.com/ZZ-520-ZZ/Plotforge/actions/workflows/ci.yml/badge.svg)](https://github.com/ZZ-520-ZZ/Plotforge/actions/workflows/ci.yml)
 
 Plotforge 是面向物理实验数据处理的跨平台曲线绘图应用。主界面使用 Flet，可运行于 Windows、Android 和 Linux；Tkinter 界面作为 Windows 兼容入口保留。数据校验、数列生成、误差棒、拟合、导入导出和工程文件由共享 Python 模块实现。
 
 ## 下载应用
 
-预发布安装包位于 [GitHub Releases](https://github.com/ZZ-520-ZZ/line-chart/releases/tag/v0.1.0-preview)：
+预发布安装包位于 [GitHub Releases](https://github.com/ZZ-520-ZZ/Plotforge/releases/tag/v0.1.0-preview)：
 
 - `Plotforge-Windows.zip`：Windows 10/11 免安装便携版，解压后运行 `Plotforge.exe`
 - `Plotforge-Android-arm64.apk`：Android 64 位测试版，支持 Android 7.0（API 24）及以上系统
@@ -116,8 +116,8 @@ Windows、Android 和 Tkinter 兼容版使用同一种工程格式。工程文�
 Windows PowerShell：
 
 ```powershell
-git clone https://github.com/ZZ-520-ZZ/line-chart.git
-cd line-chart
+git clone https://github.com/ZZ-520-ZZ/Plotforge.git
+cd Plotforge
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
@@ -127,8 +127,8 @@ python main.py
 Linux：
 
 ```bash
-git clone https://github.com/ZZ-520-ZZ/line-chart.git
-cd line-chart
+git clone https://github.com/ZZ-520-ZZ/Plotforge.git
+cd Plotforge
 python -m venv .venv
 source .venv/bin/activate
 python -m pip install -r requirements.txt
