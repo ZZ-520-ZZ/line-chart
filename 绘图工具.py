@@ -94,7 +94,7 @@ def add_undo_support(entry):
 class PhysicsPlotTool:
     def __init__(self, root):
         self.root = root
-        self.root.title("绘图工具1.0")
+        self.root.title("绘图工具")
         self.root.geometry("900x620")
         self.root.minsize(800, 600)
 
@@ -411,7 +411,7 @@ class PhysicsPlotTool:
         about_frame = ttk.Frame(self.tab_about)
         about_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
 
-        ttk.Label(about_frame, text="绘图工具1.0", font=('Arial', 16, 'bold')).pack(pady=(10, 5))
+        ttk.Label(about_frame, text="绘图工具", font=('Arial', 16, 'bold')).pack(pady=(10, 5))
         ttk.Label(about_frame, text="物理实验专用折线绘图工具", font=('Arial', 11)).pack(pady=5)
 
         ttk.Separator(about_frame, orient='horizontal').pack(fill=tk.X, pady=15)
