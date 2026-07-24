@@ -8,8 +8,8 @@
 
 预发布安装包位于 [GitHub Releases](https://github.com/ZZ-520-ZZ/line-chart/releases/tag/v0.1.0-preview)：
 
-- `绘图工具-Windows.zip`：Windows 10/11 免安装便携版，解压后运行 `绘图工具.exe`
-- `绘图工具.apk`：Android 64 位测试版，支持 Android 7.0（API 24）及以上系统
+- `line-chart-Windows.zip`：Windows 10/11 免安装便携版，解压后运行 `绘图工具.exe`
+- `line-chart-Android-arm64.apk`：Android 64 位测试版，支持 Android 7.0（API 24）及以上系统
 - `SHA256SUMS.txt`：安装包 SHA-256 校验值
 
 当前 Release 是功能预览版。Android APK 使用调试签名，首次安装需要允许浏览器或文件管理器“安装未知应用”，不适合直接上架应用商店。Windows 便携版尚未购买代码签名证书，系统可能显示未知发布者提示。
@@ -171,8 +171,8 @@ Android 构建还需要 Flutter、JDK 17 和 Android SDK。构建目标为 `arm6
 
 ```text
 dist/
-├── 绘图工具-Windows.zip
-└── 绘图工具.apk
+├── 绘图工具-Windows.zip（本地构建文件；Release 中名为 line-chart-Windows.zip）
+└── 绘图工具.apk（本地构建文件；Release 中名为 line-chart-Android-arm64.apk）
 ```
 
 `build/` 和 `dist/` 不提交到 Git 仓库，正式成品通过 GitHub Release 附件提供。
