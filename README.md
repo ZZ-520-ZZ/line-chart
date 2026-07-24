@@ -12,7 +12,7 @@ Plotforge 是面向物理实验数据处理的跨平台曲线绘图应用。主�
 
 ## 下载应用
 
-预发布安装包位于 [GitHub Releases](https://github.com/ZZ-520-ZZ/line-chart/releases/tag/v0.2.0-preview)：
+预发布安装包位于 [GitHub Releases](https://github.com/ZZ-520-ZZ/line-chart/releases/tag/v0.1.0-preview)：
 
 - `Plotforge-Windows.zip`：Windows 10/11 免安装便携版，解压后运行 `Plotforge.exe`
 - `Plotforge-Android-arm64.apk`：Android 64 位测试版，支持 Android 7.0（API 24）及以上系统
