@@ -14,7 +14,7 @@ from app_state import (
 )
 
 
-APP_NAME = "绘图工具"
+APP_NAME = "Plotforge"
 PRIMARY = "#006B68"
 PRIMARY_DARK = "#66D4CF"
 FIELD_RADIUS = 6

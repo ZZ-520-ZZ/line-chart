@@ -1,6 +1,7 @@
 # coding: utf-8
 import tkinter as tk
 import sys
+from pathlib import Path
 from tkinter import ttk, messagebox, filedialog, colorchooser
 from tkinter import scrolledtext
 import matplotlib.pyplot as plt
@@ -50,6 +51,11 @@ FIT_OPTIONS = {
 FIT_LABELS = {value: label for label, value in FIT_OPTIONS.items()}
 
 
+def resource_path(*parts):
+    base_path = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
+    return base_path.joinpath(*parts)
+
+
 class UndoEntry(tk.Entry):
     def __init__(self, master=None, **kwargs):
         super().__init__(master, **kwargs)
@@ -95,7 +101,12 @@ def add_undo_support(entry):
 class PhysicsPlotTool:
     def __init__(self, root):
         self.root = root
-        self.root.title("绘图工具")
+        self.root.title("Plotforge")
+        try:
+            self.app_icon = tk.PhotoImage(file=resource_path('assets', 'icon.png'))
+            self.root.iconphoto(True, self.app_icon)
+        except tk.TclError:
+            self.app_icon = None
         self.root.geometry("900x620")
         self.root.minsize(800, 600)
 
@@ -446,8 +457,8 @@ class PhysicsPlotTool:
         about_frame = ttk.Frame(self.tab_about)
         about_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
 
-        ttk.Label(about_frame, text="绘图工具", font=('Arial', 16, 'bold')).pack(pady=(10, 5))
-        ttk.Label(about_frame, text="物理实验专用折线绘图工具", font=('Arial', 11)).pack(pady=5)
+        ttk.Label(about_frame, text="Plotforge", font=('Arial', 16, 'bold')).pack(pady=(10, 5))
+        ttk.Label(about_frame, text="物理实验绘图与拟合应用", font=('Arial', 11)).pack(pady=5)
 
         ttk.Separator(about_frame, orient='horizontal').pack(fill=tk.X, pady=15)
 

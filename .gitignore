@@ -16,3 +16,5 @@ dist/
 *.pplot
 *.bak*
 gui_800x600_*.png
+/gui-data.png
+/gui-fit.png

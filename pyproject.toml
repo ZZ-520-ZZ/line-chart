@@ -1,5 +1,5 @@
 [project]
-name = "line-chart"
+name = "plotforge"
 version = "1.0.0"
 description = "面向物理实验的跨平台曲线绘图工具"
 requires-python = ">=3.12"
@@ -13,9 +13,12 @@ dependencies = [
 
 [tool.flet]
 org = "com.zz520zz"
-product = "绘图工具"
+product = "Plotforge"
 company = "ZZ-520-ZZ"
 description = "物理实验数据、误差棒与拟合绘图工具"
+android_adaptive_icon_background = "#081D34"
+splash_color = "#081D34"
+splash_dark_color = "#081D34"
 
 [tool.flet.app]
 path = "."

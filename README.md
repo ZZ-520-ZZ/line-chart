@@ -1,15 +1,21 @@
-# 绘图工具（Line Chart）
+<p align="center">
+  <img src="assets/icon.png" width="180" alt="Plotforge 应用图标">
+</p>
+
+<h1 align="center">Plotforge</h1>
+
+<p align="center">面向物理实验的数据绘图、误差分析与曲线拟合工具</p>
 
 [![CI](https://github.com/ZZ-520-ZZ/line-chart/actions/workflows/ci.yml/badge.svg)](https://github.com/ZZ-520-ZZ/line-chart/actions/workflows/ci.yml)
 
-面向物理实验数据处理的跨平台曲线绘图应用。主界面使用 Flet，可运行于 Windows、Android 和 Linux；Tkinter 界面作为 Windows 兼容入口保留。数据校验、数列生成、误差棒、拟合、导入导出和工程文件由共享 Python 模块实现。
+Plotforge 是面向物理实验数据处理的跨平台曲线绘图应用。主界面使用 Flet，可运行于 Windows、Android 和 Linux；Tkinter 界面作为 Windows 兼容入口保留。数据校验、数列生成、误差棒、拟合、导入导出和工程文件由共享 Python 模块实现。
 
 ## 下载应用
 
-预发布安装包位于 [GitHub Releases](https://github.com/ZZ-520-ZZ/line-chart/releases/tag/v0.1.0-preview)：
+预发布安装包位于 [GitHub Releases](https://github.com/ZZ-520-ZZ/line-chart/releases/tag/v0.2.0-preview)：
 
-- `line-chart-Windows.zip`：Windows 10/11 免安装便携版，解压后运行 `绘图工具.exe`
-- `line-chart-Android-arm64.apk`：Android 64 位测试版，支持 Android 7.0（API 24）及以上系统
+- `Plotforge-Windows.zip`：Windows 10/11 免安装便携版，解压后运行 `Plotforge.exe`
+- `Plotforge-Android-arm64.apk`：Android 64 位测试版，支持 Android 7.0（API 24）及以上系统
 - `SHA256SUMS.txt`：安装包 SHA-256 校验值
 
 当前 Release 是功能预览版。Android APK 使用调试签名，首次安装需要允许浏览器或文件管理器“安装未知应用”，不适合直接上架应用商店。Windows 便携版尚未购买代码签名证书，系统可能显示未知发布者提示。
@@ -29,6 +35,20 @@
 - 响应式手机/桌面布局与深色模式
 - 拒绝 NaN、inf、非法坐标范围和不匹配的数据点数量
 - 内置 Noto Sans SC 字体，保证跨平台中文显示
+
+## 效果展示
+
+以下图片由仓库中的真实绘图和 GUI 自动化测试生成，不是静态设计稿。
+
+| 匀速直线运动：误差棒与线性拟合 | 多组实验：线性与二次拟合 |
+| --- | --- |
+| ![匀速直线运动误差棒和线性拟合](docs/images/linear-errorbar.png) | ![多组实验线性与二次拟合](docs/images/multi-curve.png) |
+
+| 电容充放电：指数拟合 | Windows 兼容界面：数据与图表 |
+| --- | --- |
+| ![电容充放电指数拟合](docs/images/exponential-fit.png) | ![Plotforge Windows 数据界面](docs/images/gui-data.png) |
+
+![Plotforge Windows 拟合结果界面](docs/images/gui-fit.png)
 
 ## 手机端数列生成
 
@@ -118,7 +138,7 @@ python main.py
 运行 Tkinter 兼容版：
 
 ```powershell
-python "绘图工具.py"
+python plotforge_tk.py
 ```
 
 ## 自动化测试
@@ -171,8 +191,8 @@ Android 构建还需要 Flutter、JDK 17 和 Android SDK。构建目标为 `arm6
 
 ```text
 dist/
-├── 绘图工具-Windows.zip（本地构建文件；Release 中名为 line-chart-Windows.zip）
-└── 绘图工具.apk（本地构建文件；Release 中名为 line-chart-Android-arm64.apk）
+├── Plotforge-Windows.zip
+└── Plotforge-Android-arm64.apk
 ```
 
 `build/` 和 `dist/` 不提交到 Git 仓库，正式成品通过 GitHub Release 附件提供。
@@ -187,7 +207,7 @@ dist/
 | `plot_core.py` | 数据解析、数列计算、拟合与 Matplotlib 绘图 |
 | `data_io.py` | CSV、Excel 数据导入 |
 | `project_io.py` | `.pplot` 工程保存与恢复 |
-| `绘图工具.py` | Tkinter 兼容入口 |
+| `plotforge_tk.py` | Tkinter 兼容入口 |
 | `tests/` | 跨平台功能测试 |
 | `test_regressions.py` | 历史缺陷回归测试 |
 | `cross_platform_smoke_test.py` | 三组真实绘图测试 |

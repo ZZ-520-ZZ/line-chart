@@ -38,10 +38,11 @@ jobs:
         run: |
           flet build apk . \
             --yes \
-            --project line_chart \
-            --artifact line_chart \
-            --product 绘图工具 \
+            --project plotforge \
+            --artifact plotforge \
+            --product Plotforge \
             --org com.zz520zz \
+            --android-adaptive-icon-background "#081D34" \
             --arch arm64-v8a \
             --android-extract-packages matplotlib \
             --android-legacy-packaging \
@@ -53,12 +54,12 @@ jobs:
       - name: Prepare artifact
         run: |
           mkdir -p dist
-          cp build/apk/line_chart.apk "dist/绘图工具.apk"
+          cp build/apk/plotforge.apk "dist/Plotforge-Android-arm64.apk"
 
       - name: Upload Android package
         uses: actions/upload-artifact@v4
         with:
           name: preview-android-apk
-          path: dist/绘图工具.apk
+          path: dist/Plotforge-Android-arm64.apk
           if-no-files-found: error
           retention-days: 7

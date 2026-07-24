@@ -10,7 +10,7 @@ from pathlib import Path
 
 os.environ.setdefault("MPLBACKEND", "Agg")
 
-DEFAULT_TOOL_PATH = Path(__file__).with_name("绘图工具.py")
+DEFAULT_TOOL_PATH = Path(__file__).with_name("plotforge_tk.py")
 
 
 def load_tool_module():

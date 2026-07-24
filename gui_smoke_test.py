@@ -12,7 +12,7 @@ from PIL import ImageGrab
 
 TOOL_PATH = Path(os.environ.get(
     "PLOT_TOOL_PATH",
-    Path(__file__).with_name("绘图工具.py")))
+    Path(__file__).with_name("plotforge_tk.py")))
 
 
 def load_module():
@@ -160,8 +160,8 @@ def main():
 
     screenshot_dir = Path(os.environ.get("GUI_SCREENSHOT_DIR", TOOL_PATH.parent))
     screenshot_dir.mkdir(parents=True, exist_ok=True)
-    for tab, filename in ((app.tab_data, "gui_800x600_data.png"),
-                          (app.tab_fit, "gui_800x600_fit.png")):
+    for tab, filename in ((app.tab_data, "gui-data.png"),
+                          (app.tab_fit, "gui-fit.png")):
         app.notebook.select(tab)
         root.update_idletasks()
         root.update()

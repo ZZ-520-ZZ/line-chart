@@ -1,7 +1,7 @@
 $ErrorActionPreference = "Stop"
 $env:PYTHONUTF8 = "1"
 $env:PYTHONIOENCODING = "utf-8"
-$productName = -join (0x7ED8, 0x56FE, 0x5DE5, 0x5177 | ForEach-Object { [char]$_ })
+$productName = "Plotforge"
 
 $flet = Join-Path $PSScriptRoot ".venv\Scripts\flet.exe"
 if (-not (Test-Path $flet)) {
@@ -10,11 +10,12 @@ if (-not (Test-Path $flet)) {
 
 & $flet pack (Join-Path $PSScriptRoot "main.py") `
     --name $productName `
+    --icon (Join-Path $PSScriptRoot "assets\plotforge.ico") `
     --onedir `
     --distpath (Join-Path $PSScriptRoot "dist\windows") `
     --add-data "assets:assets" `
     --product-name $productName `
-    --file-description "Physics experiment line chart tool" `
+    --file-description "Physics experiment plotting and fitting tool" `
     --company-name "ZZ-520-ZZ" `
     --yes
 
