@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import numpy as np
 from PIL import Image
 
 from app_state import CurveForm, PlotForm
@@ -87,7 +88,35 @@ def main():
     exponential_fits = render_case("exponential", exponential, 1)
     assert abs(exponential_fits[0].parameters["rate"] - 0.5) < 1e-8
 
-    print("CROSS_PLATFORM_SMOKE_PASS cases=3 images=3 fits=4")
+    custom_x = np.linspace(0, 5, 16)
+    custom_y = 2.5 * np.sin(1.2 * custom_x + 0.3) + 0.5
+    custom = PlotForm(
+        title="简谐振动自定义函数拟合",
+        note="模型：a*sin(b*x+c)+d",
+        x_label="时间",
+        x_unit="s",
+        y_label="位移",
+        y_unit="cm",
+        x_data=",".join(f"{value:.12g}" for value in custom_x),
+        curves=[
+            CurveForm(
+                label="振动实验组",
+                data=",".join(f"{value:.12g}" for value in custom_y),
+                color="#CC79A7",
+                marker="D",
+                fit_type="custom",
+                custom_expression="a*sin(b*x+c)+d",
+                custom_initial_values="a=2,b=1,c=0,d=0",
+            )
+        ],
+    )
+    custom_fits = render_case("custom_fit", custom, 1)
+    assert abs(custom_fits[0].parameters["a"] - 2.5) < 1e-8
+    assert abs(custom_fits[0].parameters["b"] - 1.2) < 1e-8
+    assert abs(custom_fits[0].parameters["c"] - 0.3) < 1e-8
+    assert abs(custom_fits[0].parameters["d"] - 0.5) < 1e-8
+
+    print("CROSS_PLATFORM_SMOKE_PASS cases=4 images=4 fits=5")
 
 
 if __name__ == "__main__":

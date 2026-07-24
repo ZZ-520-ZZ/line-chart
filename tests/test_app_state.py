@@ -63,6 +63,22 @@ class PlotFormTests(unittest.TestCase):
 
         self.assertEqual(restored.to_project(), form.to_project())
 
+    def test_custom_fit_configuration_reaches_chart_spec(self):
+        form = PlotForm(
+            x_data="0,1,2,3",
+            curves=[CurveForm(
+                label="自定义曲线",
+                data="1,3,5,7",
+                fit_type="custom",
+                custom_expression="a*x+b",
+                custom_initial_values="a=1,b=0")],
+        )
+
+        curve = form.build_chart_spec().curves[0]
+
+        self.assertEqual(curve.custom_expression, "a*x+b")
+        self.assertEqual(curve.custom_initial_values, {"a": 1.0, "b": 0.0})
+
     def test_csv_import_replaces_curves_and_keeps_labels(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "data.csv"

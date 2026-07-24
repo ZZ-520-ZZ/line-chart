@@ -3,7 +3,8 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 
-PROJECT_VERSION = 1
+PROJECT_VERSION = 2
+SUPPORTED_PROJECT_VERSIONS = (1, PROJECT_VERSION)
 
 
 @dataclass(frozen=True)
@@ -15,6 +16,8 @@ class CurveProject:
     visible: bool
     marker: str
     fit_type: str
+    custom_expression: str = ""
+    custom_initial_values: str = ""
 
 
 @dataclass(frozen=True)
@@ -54,13 +57,22 @@ def load_project(file_path):
         payload = json.loads(Path(file_path).read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise ValueError(f"工程文件无法读取：{exc}") from exc
-    if not isinstance(payload, dict) or payload.get("version") != PROJECT_VERSION:
+    if not isinstance(payload, dict) or payload.get("version") not in SUPPORTED_PROJECT_VERSIONS:
         raise ValueError("工程文件版本不受支持")
     project = payload.get("project")
     if not isinstance(project, dict):
         raise ValueError("工程文件缺少项目数据")
     try:
-        curves = tuple(CurveProject(**curve) for curve in project.get("curves", []))
+        curves = tuple(
+            CurveProject(
+                **{
+                    "custom_expression": "",
+                    "custom_initial_values": "",
+                    **curve,
+                }
+            )
+            for curve in project.get("curves", [])
+        )
         return ProjectState(**{**project, "curves": curves})
     except (TypeError, ValueError) as exc:
         raise ValueError(f"工程文件结构无效：{exc}") from exc

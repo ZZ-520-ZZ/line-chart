@@ -25,7 +25,7 @@ Plotforge 是面向物理实验数据处理的跨平台曲线绘图应用。主�
 - 多条 Y 曲线共享一组 X 数据，原始测量值不会被自动偏移或修改
 - 等差、等比数列生成，可预览并写入 X 数据或任意 Y 曲线
 - X/Y 不确定度与误差棒，支持统一数值或逐点列表
-- 线性、二次和指数拟合
+- 线性、二次、指数和自定义函数拟合
 - 显示拟合方程、参数、R² 和相关系数
 - 导入 CSV、XLSX、XLSM 实验数据
 - 使用 `.pplot` 保存和恢复完整绘图工程
@@ -51,7 +51,32 @@ Plotforge 是面向物理实验数据处理的跨平台曲线绘图应用。主�
 | --- | --- |
 | ![电容充放电指数拟合](docs/images/exponential-fit.png) | ![Plotforge Windows 数据界面](docs/images/gui-data.png) |
 
-![Plotforge Windows 拟合结果界面](docs/images/gui-fit.png)
+| 简谐振动：自定义正弦函数拟合 | Windows 兼容界面：拟合结果 |
+| --- | --- |
+| ![简谐振动自定义函数拟合](docs/images/custom-fit.png) | ![Plotforge Windows 拟合结果界面](docs/images/gui-fit.png) |
+
+## 自定义函数拟合
+
+在任意 Y 曲线的“拟合方式”中选择“自定义函数拟合”，应用会弹出独立配置窗口。输入函数并确认后即可绘图；之后可通过“编辑自定义函数”再次修改。
+
+函数使用 `x` 表示自变量，其他名称会被识别为待拟合参数。例如：
+
+```text
+a*x+b
+a*x**2+b*x+c
+a*exp(b*x)
+a*sin(b*x+c)+d
+```
+
+乘方必须写作 `**`。支持 `sin`、`cos`、`tan`、`exp`、`log`、`sqrt`、`abs`、`sinh`、`cosh`、`tanh`、`arcsin`、`arccos` 和 `arctan`，并可使用常量 `pi`、`e`。
+
+参数初值是可选项，格式为：
+
+```text
+a=2,b=1,c=0,d=0
+```
+
+未填写的参数初值默认为 `1`。非线性模型可能存在多个局部解，遇到“拟合未收敛”时应根据实验量级提供更接近预期的初值。函数最多包含 8 个参数和 200 个字符；导入、属性访问、下标、任意代码调用、NaN 和 inf 会在计算前被拒绝。自定义拟合使用纯 NumPy 阻尼最小二乘，不增加 SciPy 依赖，可继续用于 Android 构建。
 
 ## 手机端数列生成
 
@@ -106,11 +131,11 @@ CSV 或 Excel 文件的第一行为列名，第一列作为 X，其余列分别�
 `.pplot` 工程文件用于保存仍需继续编辑的实验绘图状态，包括：
 
 - 原始 X/Y 数据和不确定度
-- 曲线名称、颜色、数据点、可见状态和拟合方式
+- 曲线名称、颜色、数据点、可见状态、拟合方式、自定义函数和参数初值
 - 标题、图表说明、坐标轴名称和单位
 - 坐标范围、精度、网格和图例设置
 
-Windows、Android 和 Tkinter 兼容版使用同一种工程格式。工程文件用于继续编辑，导出的图片用于实验报告、打印或分享。
+Windows、Android 和 Tkinter 兼容版使用同一种工程格式。当前工程格式为 v2，并可向后读取已有的 v1 工程。工程文件用于继续编辑，导出的图片用于实验报告、打印或分享。
 
 ## 从源码运行
 
@@ -146,23 +171,24 @@ python plotforge_tk.py
 
 ## 自动化测试
 
-运行 34 项单元与回归测试：
+运行 42 项单元与回归测试：
 
 ```powershell
 python run_tests.py
 ```
 
-运行三组真实绘图测试：
+运行四组真实绘图测试：
 
 ```powershell
 python cross_platform_smoke_test.py
 ```
 
-三组测试覆盖：
+四组测试覆盖：
 
 1. 数列生成、线性运动数据及 X/Y 误差棒。
 2. 两条曲线的线性和二次拟合。
 3. 指数数据与指数拟合。
+4. 简谐振动数据与四参数自定义正弦函数拟合。
 
 Windows 上还可以运行 Tkinter 真实窗口测试：
 
@@ -170,7 +196,7 @@ Windows 上还可以运行 Tkinter 真实窗口测试：
 python gui_smoke_test.py
 ```
 
-GitHub Actions 会在每次 push 和 Pull Request 时，使用 Python 3.12 在 Windows 与 Ubuntu 上自动运行 34 项测试和三组真实绘图测试，并上传生成的图片。`Build preview packages` 工作流可由维护者手动触发，在 Ubuntu 上重复测试、构建 Android APK，并使用 `apksigner` 验证证书主体为 `CN=Android Debug`；它不会自动创建 Release 或上传应用商店。
+GitHub Actions 会在每次 push 和 Pull Request 时，使用 Python 3.12 在 Windows 与 Ubuntu 上自动运行 42 项测试和四组真实绘图测试，并上传生成的图片。`Build preview packages` 工作流可由维护者手动触发，在 Ubuntu 上重复测试、构建 Android APK，并使用 `apksigner` 验证证书主体为 `CN=Android Debug`；它不会自动创建 Release 或上传应用商店。
 
 ## 构建应用
 
@@ -209,13 +235,13 @@ dist/
 | `main.py` | Flet 跨平台应用入口 |
 | `flet_app.py` | 手机与桌面响应式界面 |
 | `app_state.py` | 表单状态、数列写入和绘图编排 |
-| `plot_core.py` | 数据解析、数列计算、拟合与 Matplotlib 绘图 |
+| `plot_core.py` | 数据解析、数列计算、安全函数解析、拟合与 Matplotlib 绘图 |
 | `data_io.py` | CSV、Excel 数据导入 |
 | `project_io.py` | `.pplot` 工程保存与恢复 |
 | `plotforge_tk.py` | Tkinter 兼容入口 |
 | `tests/` | 跨平台功能测试 |
 | `test_regressions.py` | 历史缺陷回归测试 |
-| `cross_platform_smoke_test.py` | 三组真实绘图测试 |
+| `cross_platform_smoke_test.py` | 四组真实绘图测试 |
 | `gui_smoke_test.py` | Windows Tkinter 窗口测试 |
 | `.github/workflows/ci.yml` | Windows/Ubuntu 持续集成配置 |
 | `build_windows.ps1` | Windows 便携版构建脚本 |

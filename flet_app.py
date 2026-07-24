@@ -12,6 +12,7 @@ from app_state import (
     format_fit_results,
     generate_series_from_text,
 )
+from plot_core import custom_parameter_names, parse_custom_initial_values
 
 
 APP_NAME = "Plotforge"
@@ -23,6 +24,7 @@ FIT_OPTIONS = (
     ("linear", "线性拟合"),
     ("quadratic", "二次拟合"),
     ("exponential", "指数拟合"),
+    ("custom", "自定义函数拟合"),
 )
 MARKER_OPTIONS = (
     ("o", "圆点"),
@@ -45,6 +47,9 @@ class CurveEditor:
         self.app = app
         self.index = index
         self.color = curve.color
+        self.custom_expression = curve.custom_expression
+        self.custom_initial_values = curve.custom_initial_values
+        self._previous_fit_type = curve.fit_type if curve.fit_type != "custom" else "none"
         self.label = app._text_field(
             value=curve.label,
             label="图例名称",
@@ -77,6 +82,7 @@ class CurveEditor:
             label="拟合方式",
             options=_options(FIT_OPTIONS),
             col={"xs": 6, "sm": 3},
+            on_select=self._on_fit_selected,
         )
         self.marker = app._dropdown(
             value=curve.marker,
@@ -85,6 +91,13 @@ class CurveEditor:
             col={"xs": 6, "sm": 3},
         )
         self.swatches = []
+        self.custom_fit_button = ft.OutlinedButton(
+            content=ft.Text("编辑自定义函数"),
+            icon=ft.Icons.FUNCTIONS,
+            on_click=lambda _: self._show_custom_fit_dialog(restore_on_cancel=False),
+            style=app._button_style(),
+            visible=curve.fit_type == "custom",
+        )
         self.color_row = self._build_color_row()
         self.control = ft.Card(
             elevation=0,
@@ -111,6 +124,7 @@ class CurveEditor:
                             spacing=8,
                             run_spacing=8,
                         ),
+                        self.custom_fit_button,
                         ft.Text("曲线颜色", size=12, color=ft.Colors.ON_SURFACE_VARIANT),
                         self.color_row,
                     ],
@@ -118,6 +132,89 @@ class CurveEditor:
                 ),
             ),
         )
+
+    def _on_fit_selected(self, _):
+        selected = self.fit_type.value or "none"
+        if selected == "custom":
+            self.custom_fit_button.visible = True
+            self.custom_fit_button.update()
+            self._show_custom_fit_dialog(restore_on_cancel=True)
+            return
+        self._previous_fit_type = selected
+        self.custom_fit_button.visible = False
+        self.custom_fit_button.update()
+
+    def _show_custom_fit_dialog(self, restore_on_cancel=False):
+        expression_field = self.app._text_field(
+            label="拟合函数 y =",
+            value=self.custom_expression or "a*x+b",
+            hint_text="例如：a*sin(b*x+c)",
+            autofocus=True,
+        )
+        initial_values_field = self.app._text_field(
+            label="参数初值（可选）",
+            value=self.custom_initial_values,
+            hint_text="例如：a=1,b=1,c=0；未填写的参数默认为 1",
+        )
+        error_text = ft.Text("", color=ft.Colors.ERROR, size=12, visible=False)
+        confirmed = False
+
+        def close_dialog(_=None):
+            dialog.open = False
+            if restore_on_cancel and not confirmed:
+                self.fit_type.value = self._previous_fit_type
+                self.custom_fit_button.visible = False
+            dialog.update()
+            self.fit_type.update()
+            self.custom_fit_button.update()
+
+        def confirm(_):
+            nonlocal confirmed
+            try:
+                expression = expression_field.value or ""
+                initial_values = initial_values_field.value or ""
+                parameter_names = custom_parameter_names(expression)
+                parse_custom_initial_values(initial_values, parameter_names)
+            except ValueError as exc:
+                error_text.value = str(exc)
+                error_text.visible = True
+                error_text.update()
+                return
+            self.custom_expression = expression.strip()
+            self.custom_initial_values = initial_values.strip()
+            confirmed = True
+            self.fit_type.value = "custom"
+            self.custom_fit_button.visible = True
+            dialog.open = False
+            dialog.update()
+            self.fit_type.update()
+            self.custom_fit_button.update()
+
+        dialog = ft.AlertDialog(
+            modal=True,
+            title=ft.Text(f"配置 {self.label.value or f'Y 曲线 {self.index + 1}'} 的自定义拟合"),
+            content=ft.Column(
+                [
+                    expression_field,
+                    initial_values_field,
+                    ft.Text(
+                        "变量使用 x，乘方写作 **。支持 sin、cos、tan、exp、log、sqrt、abs 等函数。",
+                        size=12,
+                        color=ft.Colors.ON_SURFACE_VARIANT,
+                    ),
+                    error_text,
+                ],
+                tight=True,
+                spacing=12,
+            ),
+            actions=[
+                ft.TextButton(content=ft.Text("取消"), on_click=close_dialog),
+                ft.FilledButton(content=ft.Text("确认"), icon=ft.Icons.CHECK, on_click=confirm),
+            ],
+            actions_alignment=ft.MainAxisAlignment.END,
+            on_dismiss=close_dialog,
+        )
+        self.app.page.show_dialog(dialog)
 
     def _build_color_row(self):
         controls = []
@@ -156,6 +253,8 @@ class CurveEditor:
             visible=bool(self.visible.value),
             marker=self.marker.value or "o",
             fit_type=self.fit_type.value or "none",
+            custom_expression=self.custom_expression,
+            custom_initial_values=self.custom_initial_values,
         )
 
 

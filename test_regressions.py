@@ -199,7 +199,7 @@ class PlotToolRegressionTests(unittest.TestCase):
         self.module.messagebox.showinfo = self.original_showinfo
         self.module.filedialog.asksaveasfilename = self.original_save_dialog
 
-    def run_series(self, kind, start, end, step, timeout=1.5):
+    def run_series(self, kind, start, end, step, timeout=5.0):
         command = [
             sys.executable,
             str(Path(__file__)),

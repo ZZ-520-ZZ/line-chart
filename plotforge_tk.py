@@ -9,8 +9,9 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 from data_io import load_table
 from plot_core import (ChartSpec, CurveSpec, create_annotation,
+                       custom_parameter_names,
                        generate_series_values, parse_axis_limits,
-                       parse_numeric_data, parse_precision,
+                       parse_custom_initial_values, parse_numeric_data, parse_precision,
                        parse_uncertainty_text, render_chart,
                        validate_precision_text)
 from project_io import (CurveProject, ProjectState,
@@ -47,6 +48,7 @@ FIT_OPTIONS = {
     '线性': 'linear',
     '二次': 'quadratic',
     '指数': 'exponential',
+    '自定义函数': 'custom',
 }
 FIT_LABELS = {value: label for label, value in FIT_OPTIONS.items()}
 
@@ -437,9 +439,13 @@ class PhysicsPlotTool:
         if fit_results:
             blocks = []
             for result in fit_results:
+                parameter_text = "\n".join(
+                    f"  {name} = {value:.8g}"
+                    for name, value in result.parameters.items())
                 blocks.append(
                     f"{result.curve_label} - {FIT_LABELS.get(result.fit_type, result.fit_type)}拟合\n"
                     f"方程: {result.equation}\n"
+                    f"参数:\n{parameter_text}\n"
                     f"R² = {result.r_squared:.6f}\n"
                     f"相关系数 r = {result.correlation:.6f}")
             text = "\n\n".join(blocks)
@@ -571,6 +577,10 @@ class PhysicsPlotTool:
             analysis_row, textvariable=fit_var,
             values=list(FIT_OPTIONS), state='readonly', width=7)
         fit_combo.pack(side=tk.LEFT, padx=(3, 0))
+        custom_fit_button = ttk.Button(
+            analysis_row, text="设置", width=4,
+            command=lambda cid=curve_id: self.open_custom_fit_window_by_id(cid))
+        custom_fit_button.pack(side=tk.LEFT, padx=(3, 0))
 
         btn_row = ttk.Frame(curve_frame)
         btn_row.pack(fill=tk.X)
@@ -589,13 +599,84 @@ class PhysicsPlotTool:
             'data_entry': data_entry,
             'uncertainty_entry': uncertainty_entry,
             'fit_var': fit_var,
+            'fit_combo': fit_combo,
+            'last_fit': '不拟合',
+            'custom_expression': '',
+            'custom_initial_values': '',
             'color_var': color_var,
             'show_var': show_var,
             'marker': marker,
         }
         self.curves.append(curve_info)
+        fit_combo.bind(
+            '<<ComboboxSelected>>',
+            lambda _, info=curve_info: self.on_fit_type_selected(info))
         self.curve_frames.append(curve_frame)
         self.refresh_target_combo()
+
+    def on_fit_type_selected(self, curve):
+        if curve['fit_var'].get() == '自定义函数':
+            self.open_custom_fit_window(curve, restore_on_cancel=True)
+        else:
+            curve['last_fit'] = curve['fit_var'].get()
+
+    def open_custom_fit_window_by_id(self, curve_id):
+        curve = next((item for item in self.curves if item['id'] == curve_id), None)
+        if curve is not None:
+            self.open_custom_fit_window(curve, restore_on_cancel=False)
+
+    def open_custom_fit_window(self, curve, restore_on_cancel):
+        window = tk.Toplevel(self.root)
+        window.title("自定义函数拟合")
+        window.geometry("480x250")
+        window.minsize(400, 230)
+        window.transient(self.root)
+        window.grab_set()
+
+        body = ttk.Frame(window, padding=14)
+        body.pack(fill=tk.BOTH, expand=True)
+        ttk.Label(body, text="拟合函数 y =").pack(anchor=tk.W)
+        expression_var = tk.StringVar(
+            value=curve['custom_expression'] or 'a*x+b')
+        expression_entry = ttk.Entry(body, textvariable=expression_var)
+        expression_entry.pack(fill=tk.X, pady=(3, 10))
+        ttk.Label(body, text="参数初值（可选）").pack(anchor=tk.W)
+        initial_values_var = tk.StringVar(value=curve['custom_initial_values'])
+        ttk.Entry(body, textvariable=initial_values_var).pack(fill=tk.X, pady=(3, 8))
+        ttk.Label(
+            body,
+            text="示例：a*sin(b*x+c)，初值 a=1,b=1,c=0；乘方请使用 **",
+            foreground='#555555').pack(anchor=tk.W)
+        error_var = tk.StringVar(value='')
+        ttk.Label(body, textvariable=error_var, foreground='#b00020').pack(
+            anchor=tk.W, pady=(5, 0))
+
+        def cancel():
+            if restore_on_cancel:
+                curve['fit_var'].set(curve['last_fit'])
+            window.destroy()
+
+        def confirm():
+            expression = expression_var.get().strip()
+            initial_values = initial_values_var.get().strip()
+            try:
+                names = custom_parameter_names(expression)
+                parse_custom_initial_values(initial_values, names)
+            except ValueError as exc:
+                error_var.set(str(exc))
+                return
+            curve['custom_expression'] = expression
+            curve['custom_initial_values'] = initial_values
+            curve['fit_var'].set('自定义函数')
+            curve['last_fit'] = '自定义函数'
+            window.destroy()
+
+        buttons = ttk.Frame(body)
+        buttons.pack(side=tk.BOTTOM, fill=tk.X, pady=(12, 0))
+        ttk.Button(buttons, text="取消", command=cancel).pack(side=tk.RIGHT)
+        ttk.Button(buttons, text="确认", command=confirm).pack(side=tk.RIGHT, padx=(0, 8))
+        window.protocol("WM_DELETE_WINDOW", cancel)
+        expression_entry.focus_set()
 
     def remove_curve_by_id(self, curve_id):
         if len(self.curves) <= 1:
@@ -716,6 +797,9 @@ class PhysicsPlotTool:
             self.set_text(curve['data_entry'], self.format_values(imported.values))
             self.set_entry(curve['uncertainty_entry'], '')
             curve['fit_var'].set('不拟合')
+            curve['last_fit'] = '不拟合'
+            curve['custom_expression'] = ''
+            curve['custom_initial_values'] = ''
             curve['show_var'].set(True)
         messagebox.showinfo("导入完成", f"已导入{len(table.x_values)}个数据点和{len(table.series)}条曲线")
 
@@ -745,7 +829,9 @@ class PhysicsPlotTool:
                 color=curve['color_var'].get(),
                 visible=curve['show_var'].get(),
                 marker=curve['marker'],
-                fit_type=FIT_OPTIONS.get(curve['fit_var'].get(), 'none'))
+                fit_type=FIT_OPTIONS.get(curve['fit_var'].get(), 'none'),
+                custom_expression=curve.get('custom_expression', ''),
+                custom_initial_values=curve.get('custom_initial_values', ''))
                 for curve in self.curves))
 
     def apply_project_state(self, state):
@@ -778,6 +864,9 @@ class PhysicsPlotTool:
             curve['show_var'].set(saved.visible)
             curve['marker'] = saved.marker
             curve['fit_var'].set(FIT_LABELS.get(saved.fit_type, '不拟合'))
+            curve['last_fit'] = curve['fit_var'].get()
+            curve['custom_expression'] = saved.custom_expression
+            curve['custom_initial_values'] = saved.custom_initial_values
         self.clear_fit_results()
 
     def save_project(self):
@@ -1013,13 +1102,26 @@ class PhysicsPlotTool:
                 except ValueError as exc:
                     messagebox.showerror("错误", str(exc))
                     return
+                fit_type = FIT_OPTIONS.get(curve['fit_var'].get(), 'none')
+                custom_initial_values = None
+                if fit_type == 'custom':
+                    try:
+                        parameter_names = custom_parameter_names(
+                            curve.get('custom_expression', ''))
+                        custom_initial_values = parse_custom_initial_values(
+                            curve.get('custom_initial_values', ''), parameter_names)
+                    except ValueError as exc:
+                        messagebox.showerror("自定义拟合错误", str(exc))
+                        return
                 active_curves.append(CurveSpec(
                     values=y_data,
                     label=curve['legend_entry'].get().strip() or '数据集',
                     color=curve['color_var'].get(),
                     marker=curve['marker'],
                     errors=y_errors,
-                    fit_type=FIT_OPTIONS.get(curve['fit_var'].get(), 'none')))
+                    fit_type=fit_type,
+                    custom_expression=curve.get('custom_expression', ''),
+                    custom_initial_values=custom_initial_values))
 
         if not active_curves:
             messagebox.showerror("错误", "请至少填写一条Y轴曲线数据并确保其显示状态为开启")

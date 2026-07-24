@@ -98,6 +98,64 @@ def main():
     app.curves[0]["fit_var"].set("线性")
     app.curves[1]["fit_var"].set("二次")
 
+    app.curves[0]["fit_var"].set("自定义函数")
+    app.curves[0]["fit_combo"].event_generate("<<ComboboxSelected>>")
+    root.update_idletasks()
+    root.update()
+    custom_windows = [
+        child for child in root.winfo_children()
+        if isinstance(child, module.tk.Toplevel) and child.title() == "自定义函数拟合"
+    ]
+    assert len(custom_windows) == 1
+    custom_window = custom_windows[0]
+    custom_entries = [
+        child for child in descendants(custom_window)
+        if isinstance(child, module.ttk.Entry)
+    ]
+    replace_entry(custom_entries[0], "a*x+b")
+    replace_entry(custom_entries[1], "a=1,b=0")
+    confirm_buttons = [
+        child for child in descendants(custom_window)
+        if isinstance(child, module.ttk.Button) and child.cget("text") == "确认"
+    ]
+    assert len(confirm_buttons) == 1
+    confirm_buttons[0].invoke()
+    root.update_idletasks()
+    root.update()
+    assert app.curves[0]["custom_expression"] == "a*x+b"
+
+    app.curves[0]["fit_var"].set("线性")
+    app.curves[0]["fit_combo"].event_generate("<<ComboboxSelected>>")
+    app.curves[0]["fit_var"].set("自定义函数")
+    app.curves[0]["fit_combo"].event_generate("<<ComboboxSelected>>")
+    root.update_idletasks()
+    root.update()
+    cancel_window = [
+        child for child in root.winfo_children()
+        if isinstance(child, module.tk.Toplevel) and child.title() == "自定义函数拟合"
+    ][0]
+    cancel_button = [
+        child for child in descendants(cancel_window)
+        if isinstance(child, module.ttk.Button) and child.cget("text") == "取消"
+    ][0]
+    cancel_button.invoke()
+    assert app.curves[0]["fit_var"].get() == "线性"
+
+    app.curves[0]["fit_var"].set("自定义函数")
+    app.curves[0]["fit_combo"].event_generate("<<ComboboxSelected>>")
+    root.update_idletasks()
+    root.update()
+    reopen_window = [
+        child for child in root.winfo_children()
+        if isinstance(child, module.tk.Toplevel) and child.title() == "自定义函数拟合"
+    ][0]
+    reopen_confirm = [
+        child for child in descendants(reopen_window)
+        if isinstance(child, module.ttk.Button) and child.cget("text") == "确认"
+    ][0]
+    reopen_confirm.invoke()
+    assert app.curves[0]["fit_var"].get() == "自定义函数"
+
     app.precision_spinbox.delete(0, "end")
     app.precision_spinbox.insert(0, "abc")
     assert app.precision_var.get() == ""
@@ -123,7 +181,8 @@ def main():
     assert app.annotation in app.ax.texts
     assert "真实Tkinter控件自动填充与绘图检查" in [text.get_text() for text in app.ax.texts]
     fit_text = app.fit_result_text.get("1.0", "end")
-    assert "线性拟合" in fit_text
+    assert "自定义函数拟合" in fit_text
+    assert "y = a*x+b" in fit_text
     assert "二次拟合" in fit_text
     assert "R²" in fit_text and "相关系数" in fit_text
 

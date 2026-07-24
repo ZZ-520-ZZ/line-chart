@@ -1,5 +1,6 @@
+import ast
 from dataclasses import dataclass
-from typing import Sequence
+from typing import Mapping, Sequence
 
 import numpy as np
 from matplotlib.ticker import FuncFormatter
@@ -16,6 +17,8 @@ class CurveSpec:
     marker: str
     errors: Sequence[float] | float | None = None
     fit_type: str = "none"
+    custom_expression: str = ""
+    custom_initial_values: Mapping[str, float] | None = None
 
 
 @dataclass(frozen=True)
@@ -209,9 +212,292 @@ def parse_uncertainty_text(data_text, point_count, label):
     return normalize_uncertainties(values, point_count, label)
 
 
-def fit_curve(x_values, y_values, fit_type, curve_label, errors=None):
+_CUSTOM_FUNCTIONS = {
+    "sin": np.sin,
+    "cos": np.cos,
+    "tan": np.tan,
+    "exp": np.exp,
+    "log": np.log,
+    "sqrt": np.sqrt,
+    "abs": np.abs,
+    "sinh": np.sinh,
+    "cosh": np.cosh,
+    "tanh": np.tanh,
+    "arcsin": np.arcsin,
+    "arccos": np.arccos,
+    "arctan": np.arctan,
+}
+_CUSTOM_CONSTANTS = {"pi": np.pi, "e": np.e}
+_CUSTOM_MAX_EXPRESSION_LENGTH = 200
+_CUSTOM_MAX_PARAMETERS = 8
+
+
+class _CustomExpressionValidator(ast.NodeVisitor):
+    def __init__(self):
+        self.parameters = []
+
+    def generic_visit(self, node):
+        raise ValueError(f"自定义函数中不允许使用 {type(node).__name__}")
+
+    def visit_Expression(self, node):
+        self.visit(node.body)
+
+    def visit_BinOp(self, node):
+        if not isinstance(node.op, (ast.Add, ast.Sub, ast.Mult, ast.Div, ast.Pow)):
+            raise ValueError("自定义函数只允许 +、-、*、/ 和 ** 运算")
+        self.visit(node.left)
+        self.visit(node.right)
+
+    def visit_UnaryOp(self, node):
+        if not isinstance(node.op, (ast.UAdd, ast.USub)):
+            raise ValueError("自定义函数只允许正负号一元运算")
+        self.visit(node.operand)
+
+    def visit_Name(self, node):
+        name = node.id
+        if name == "x" or name in _CUSTOM_CONSTANTS:
+            return
+        if name in _CUSTOM_FUNCTIONS:
+            raise ValueError(f"函数 {name} 必须使用括号调用")
+        if name.startswith("_"):
+            raise ValueError("自定义参数名不能以下划线开头")
+        if name not in self.parameters:
+            self.parameters.append(name)
+            if len(self.parameters) > _CUSTOM_MAX_PARAMETERS:
+                raise ValueError(f"自定义函数最多允许 {_CUSTOM_MAX_PARAMETERS} 个参数")
+
+    def visit_Constant(self, node):
+        if isinstance(node.value, bool) or not isinstance(node.value, (int, float)):
+            raise ValueError("自定义函数只允许有限数字常量")
+        if not np.isfinite(float(node.value)):
+            raise ValueError("自定义函数只允许有限数字常量")
+
+    def visit_Call(self, node):
+        if not isinstance(node.func, ast.Name) or node.func.id not in _CUSTOM_FUNCTIONS:
+            raise ValueError("自定义函数中包含不允许的函数调用")
+        if node.keywords or len(node.args) != 1:
+            raise ValueError(f"函数 {node.func.id} 只接受一个位置参数")
+        self.visit(node.args[0])
+
+
+def _normalize_custom_expression(expression):
+    normalized = str(expression or "").strip()
+    if "=" in normalized:
+        left, right = normalized.split("=", 1)
+        if left.strip().lower() == "y":
+            normalized = right.strip()
+    if not normalized:
+        raise ValueError("请输入自定义拟合函数")
+    if len(normalized) > _CUSTOM_MAX_EXPRESSION_LENGTH:
+        raise ValueError(
+            f"自定义函数不能超过 {_CUSTOM_MAX_EXPRESSION_LENGTH} 个字符"
+        )
+    return normalized
+
+
+def _compile_custom_expression(expression):
+    normalized = _normalize_custom_expression(expression)
+    try:
+        tree = ast.parse(normalized, mode="eval")
+    except SyntaxError as exc:
+        raise ValueError(f"自定义函数语法错误：{exc.msg}") from exc
+    validator = _CustomExpressionValidator()
+    validator.visit(tree)
+    if not validator.parameters:
+        raise ValueError("自定义拟合函数至少需要一个待拟合参数")
+    code = compile(tree, "<custom-fit>", "eval")
+
+    def evaluate(x_values, parameters):
+        x_array = np.asarray(x_values, dtype=float)
+        namespace = {
+            **_CUSTOM_FUNCTIONS,
+            **_CUSTOM_CONSTANTS,
+            "x": x_array,
+            **parameters,
+        }
+        try:
+            with np.errstate(all="ignore"):
+                raw_result = eval(code, {"__builtins__": {}}, namespace)
+                result = np.asarray(raw_result, dtype=float)
+                if result.ndim == 0:
+                    result = np.full_like(x_array, float(result), dtype=float)
+                else:
+                    result = np.broadcast_to(result, x_array.shape).astype(float)
+        except (ArithmeticError, TypeError, ValueError) as exc:
+            raise ValueError(f"自定义函数计算失败：{exc}") from exc
+        if not np.all(np.isfinite(result)):
+            raise ValueError("自定义函数计算出了 NaN 或 inf，请调整函数或参数初值")
+        return result
+
+    return normalized, tuple(validator.parameters), evaluate
+
+
+def custom_parameter_names(expression):
+    """Return fit parameter names after validating a custom expression."""
+    _, parameter_names, _ = _compile_custom_expression(expression)
+    return parameter_names
+
+
+def parse_custom_initial_values(values, parameter_names):
+    parameter_names = tuple(parameter_names)
+    parsed = {}
+    if isinstance(values, Mapping):
+        items = values.items()
+    else:
+        text = str(values or "").strip()
+        items = []
+        if text:
+            assignments = [item.strip() for item in text.split(",")]
+            for assignment in assignments:
+                if assignment.count("=") != 1:
+                    raise ValueError("参数初值格式应为 a=1,b=0")
+                name, raw_value = (part.strip() for part in assignment.split("=", 1))
+                items.append((name, raw_value))
+
+    for name, raw_value in items:
+        if name not in parameter_names:
+            raise ValueError(f"参数初值中的 {name} 不在自定义函数中")
+        if name in parsed:
+            raise ValueError(f"参数 {name} 的初值重复")
+        try:
+            value = float(raw_value)
+        except (TypeError, ValueError):
+            raise ValueError(f"参数 {name} 的初值必须是数字") from None
+        if not np.isfinite(value):
+            raise ValueError(f"参数 {name} 的初值必须是有限数字")
+        parsed[name] = value
+    return {name: parsed.get(name, 1.0) for name in parameter_names}
+
+
+def _fit_custom_curve(
+    x_values,
+    y_values,
+    curve_label,
+    expression,
+    initial_values,
+    errors,
+):
+    normalized, parameter_names, evaluate = _compile_custom_expression(expression)
+    parameters = parse_custom_initial_values(initial_values, parameter_names)
+    x_array = np.asarray(x_values, dtype=float)
+    y_array = np.asarray(y_values, dtype=float)
+    parameter_count = len(parameter_names)
+    if len(x_array) < parameter_count or len(np.unique(x_array)) < parameter_count:
+        raise ValueError(
+            f"{curve_label}至少需要{parameter_count}个不同的X值才能拟合该自定义函数"
+        )
+
+    weights = np.ones_like(y_array)
+    if errors is not None and all(error > 0 for error in errors):
+        weights = 1.0 / np.asarray(errors, dtype=float)
+
+    current = np.asarray([parameters[name] for name in parameter_names], dtype=float)
+
+    def model(vector, sample_x=x_array):
+        return evaluate(
+            sample_x,
+            {name: float(value) for name, value in zip(parameter_names, vector)},
+        )
+
+    predicted = model(current)
+    residual = (y_array - predicted) * weights
+    loss = float(residual @ residual)
+    damping = 1e-3
+    data_scale = max(float(y_array @ y_array), 1.0)
+    converged = loss <= np.finfo(float).eps * data_scale
+
+    for _ in range(0 if converged else 200):
+        jacobian = np.empty((len(x_array), parameter_count), dtype=float)
+        for index in range(parameter_count):
+            step = 1e-6 * max(abs(current[index]), 1.0)
+            upper = current.copy()
+            lower = current.copy()
+            upper[index] += step
+            lower[index] -= step
+            jacobian[:, index] = (model(upper) - model(lower)) / (2.0 * step)
+        weighted_jacobian = jacobian * weights[:, None]
+        normal = weighted_jacobian.T @ weighted_jacobian
+        gradient = weighted_jacobian.T @ residual
+        scale = np.maximum(np.diag(normal), 1.0)
+        try:
+            delta = np.linalg.solve(normal + damping * np.diag(scale), gradient)
+        except np.linalg.LinAlgError as exc:
+            raise ValueError(f"{curve_label}的自定义函数无法求解，请调整函数或参数初值") from exc
+
+        candidate = current + delta
+        try:
+            candidate_predicted = model(candidate)
+        except ValueError:
+            damping *= 10.0
+            if damping > 1e15:
+                break
+            continue
+        candidate_residual = (y_array - candidate_predicted) * weights
+        candidate_loss = float(candidate_residual @ candidate_residual)
+        if candidate_loss < loss:
+            improvement = loss - candidate_loss
+            current = candidate
+            predicted = candidate_predicted
+            residual = candidate_residual
+            loss = candidate_loss
+            damping = max(damping / 3.0, 1e-12)
+            if (
+                np.linalg.norm(delta) <= 1e-9 * (np.linalg.norm(current) + 1.0)
+                or improvement <= 1e-12 * (loss + 1.0)
+            ):
+                converged = True
+                break
+        else:
+            damping *= 10.0
+            if damping > 1e15:
+                break
+
+    if not converged:
+        raise ValueError(f"{curve_label}的自定义函数拟合未收敛，请调整函数或参数初值")
+
+    residual_sum = float(np.sum((y_array - predicted) ** 2))
+    total_sum = float(np.sum((y_array - np.mean(y_array)) ** 2))
+    r_squared = 1.0 if total_sum == 0 and residual_sum == 0 else 1 - residual_sum / total_sum
+    if np.std(y_array) == 0 or np.std(predicted) == 0:
+        correlation = 1.0 if np.allclose(y_array, predicted) else 0.0
+    else:
+        correlation = float(np.corrcoef(y_array, predicted)[0, 1])
+    fit_x = np.linspace(min(x_array), max(x_array), 200)
+    fit_y = model(current, fit_x)
+    fitted_parameters = {
+        name: float(value) for name, value in zip(parameter_names, current)
+    }
+    result = FitResult(
+        curve_label=curve_label,
+        fit_type="custom",
+        equation=f"y = {normalized}",
+        parameters=fitted_parameters,
+        r_squared=float(r_squared),
+        correlation=correlation,
+    )
+    return fit_x, fit_y, result
+
+
+def fit_curve(
+    x_values,
+    y_values,
+    fit_type,
+    curve_label,
+    errors=None,
+    custom_expression="",
+    custom_initial_values=None,
+):
     if fit_type == "none":
         return None, None, None
+    if fit_type == "custom":
+        return _fit_custom_curve(
+            x_values,
+            y_values,
+            curve_label,
+            custom_expression,
+            custom_initial_values,
+            errors,
+        )
     if fit_type == "exponential":
         if len(x_values) < 2 or len(set(x_values)) < 2:
             raise ValueError(f"{curve_label}至少需要两个不同的X值才能进行指数拟合")
@@ -313,7 +599,14 @@ def render_chart(ax, spec):
                     color=curve.color, linewidth=2, markersize=8,
                     label=curve.label, clip_on=False)
         fit_x, fit_y, fit_result = fit_curve(
-            x_values, curve.values, curve.fit_type, curve.label, y_errors)
+            x_values,
+            curve.values,
+            curve.fit_type,
+            curve.label,
+            y_errors,
+            curve.custom_expression,
+            curve.custom_initial_values,
+        )
         if fit_result is not None:
             ax.plot(fit_x, fit_y, linestyle='--', color=curve.color,
                     linewidth=1.8, label=f"{curve.label} 拟合")

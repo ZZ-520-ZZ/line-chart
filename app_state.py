@@ -14,8 +14,10 @@ from plot_core import (
     ChartSpec,
     CurveSpec,
     FitResult,
+    custom_parameter_names,
     generate_series_values,
     parse_axis_limits,
+    parse_custom_initial_values,
     parse_numeric_data,
     parse_precision,
     parse_uncertainty_text,
@@ -40,6 +42,7 @@ FIT_NAMES = {
     "linear": "线性",
     "quadratic": "二次",
     "exponential": "指数",
+    "custom": "自定义函数",
 }
 
 
@@ -64,6 +67,8 @@ class CurveForm:
     visible: bool = True
     marker: str = "o"
     fit_type: str = "none"
+    custom_expression: str = ""
+    custom_initial_values: str = ""
 
     def to_project(self) -> CurveProject:
         return CurveProject(
@@ -74,6 +79,8 @@ class CurveForm:
             visible=self.visible,
             marker=self.marker,
             fit_type=self.fit_type,
+            custom_expression=self.custom_expression,
+            custom_initial_values=self.custom_initial_values,
         )
 
     @classmethod
@@ -175,6 +182,12 @@ class PlotForm:
             errors = parse_uncertainty_text(
                 curve.uncertainty, len(x_values), f"{curve.label}的Y轴不确定度"
             )
+            custom_initial_values = None
+            if curve.fit_type == "custom":
+                parameter_names = custom_parameter_names(curve.custom_expression)
+                custom_initial_values = parse_custom_initial_values(
+                    curve.custom_initial_values, parameter_names
+                )
             curves.append(
                 CurveSpec(
                     values=values,
@@ -183,6 +196,8 @@ class PlotForm:
                     marker=curve.marker,
                     errors=errors,
                     fit_type=curve.fit_type,
+                    custom_expression=curve.custom_expression,
+                    custom_initial_values=custom_initial_values,
                 )
             )
 
