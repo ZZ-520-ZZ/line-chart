@@ -37,20 +37,30 @@ jobs:
       # No custom keystore is supplied: preview APKs intentionally use debug signing.
       - name: Build debug-signed Android preview APK
         run: |
-          flet build apk . \
-            --yes \
-            --project plotforge \
-            --artifact plotforge \
-            --product Plotforge \
-            --org com.zz520zz \
-            --android-adaptive-icon-background "#081D34" \
-            --arch arm64-v8a \
-            --android-extract-packages matplotlib \
-            --android-legacy-packaging \
-            --exclude .flet .venv .git build dist tests docs __pycache__ \
-              gui_smoke_test.py test_regressions.py cross_platform_smoke_test.py run_tests.py \
-            --no-compile-app \
-            --no-rich-output
+          for attempt in 1 2 3; do
+            if flet build apk . \
+              --yes \
+              --project plotforge \
+              --artifact plotforge \
+              --product Plotforge \
+              --org com.zz520zz \
+              --android-adaptive-icon-background "#081D34" \
+              --arch arm64-v8a \
+              --android-extract-packages matplotlib \
+              --android-legacy-packaging \
+              --exclude .flet .venv .git build dist tests docs __pycache__ \
+                gui_smoke_test.py test_regressions.py cross_platform_smoke_test.py run_tests.py \
+              --no-compile-app \
+              --no-rich-output; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              echo "Android build failed after 3 attempts."
+              exit 1
+            fi
+            echo "Android build attempt $attempt failed; retrying in 30 seconds."
+            sleep 30
+          done
 
       - name: Verify Android debug signature
         run: |
