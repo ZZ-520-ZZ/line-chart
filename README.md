@@ -18,7 +18,7 @@ Plotforge 是面向物理实验数据处理的跨平台曲线绘图应用。主�
 - `Plotforge-Android-arm64.apk`：Android 64 位测试版，支持 Android 7.0（API 24）及以上系统
 - `SHA256SUMS.txt`：安装包 SHA-256 校验值
 
-当前 Release 是功能预览版。Android APK 使用调试签名，首次安装需要允许浏览器或文件管理器“安装未知应用”，不适合直接上架应用商店。Windows 便携版尚未购买代码签名证书，系统可能显示未知发布者提示。
+当前 Release 是功能预览版。Android APK 有意使用 Flet 默认的调试签名，首次安装需要允许浏览器或文件管理器“安装未知应用”，不适合直接上架应用商店。不同构建的调试证书可能变化；如果手机提示签名冲突，需要先备份 `.pplot` 工程、卸载旧版，再安装新版。Windows 便携版尚未购买代码签名证书，系统可能显示未知发布者提示。
 
 ## 主要功能
 
@@ -31,6 +31,7 @@ Plotforge 是面向物理实验数据处理的跨平台曲线绘图应用。主�
 - 使用 `.pplot` 保存和恢复完整绘图工程
 - 导出 PNG、JPG、SVG、PDF 图像
 - 自定义标题、图表说明、坐标轴、单位、范围、精度、网格和图例
+- 零点位于显示范围时，X、Y 坐标轴在数据原点 `(0,0)` 相交；零点位于范围外时保持边缘坐标轴
 - 多组高辨识度曲线颜色和数据点样式
 - 响应式手机/桌面布局与深色模式
 - 拒绝 NaN、inf、非法坐标范围和不匹配的数据点数量
@@ -39,6 +40,8 @@ Plotforge 是面向物理实验数据处理的跨平台曲线绘图应用。主�
 ## 效果展示
 
 以下图片由仓库中的真实绘图和 GUI 自动化测试生成，不是静态设计稿。
+
+“多组实验”包含正负数据，可以看到两条坐标轴在 `(0,0)` 相交；其他仅含正值的数据图会保留边缘坐标轴，避免为了显示零点而压缩有效数据区域。
 
 | 匀速直线运动：误差棒与线性拟合 | 多组实验：线性与二次拟合 |
 | --- | --- |
@@ -143,7 +146,7 @@ python plotforge_tk.py
 
 ## 自动化测试
 
-运行 31 项单元与回归测试：
+运行 34 项单元与回归测试：
 
 ```powershell
 python run_tests.py
@@ -167,7 +170,7 @@ Windows 上还可以运行 Tkinter 真实窗口测试：
 python gui_smoke_test.py
 ```
 
-GitHub Actions 会在每次 push 和 Pull Request 时，使用 Python 3.12 在 Windows 与 Ubuntu 上自动运行 31 项测试和三组真实绘图测试，并上传生成的图片。`Build preview packages` 工作流可由维护者手动触发，在 Ubuntu 上重复测试并构建 Android APK；它不会自动创建 Release 或上传应用商店。
+GitHub Actions 会在每次 push 和 Pull Request 时，使用 Python 3.12 在 Windows 与 Ubuntu 上自动运行 34 项测试和三组真实绘图测试，并上传生成的图片。`Build preview packages` 工作流可由维护者手动触发，在 Ubuntu 上重复测试并构建调试签名的 Android APK；它不会自动创建 Release 或上传应用商店。
 
 ## 构建应用
 
@@ -184,6 +187,8 @@ GitHub Actions 会在每次 push 和 Pull Request 时，使用 Python 3.12 在 W
 ```
 
 Android 构建还需要 Flutter、JDK 17 和 Android SDK。构建目标为 `arm64-v8a`，最低 API 24。Matplotlib 在 Android 上使用解压部署，相关配置已包含在 `pyproject.toml` 和构建脚本中。
+
+预发布构建不会传入自定义 Android keystore，因此 APK 使用调试签名。`build_android.ps1` 会清除可能继承的 `FLET_ANDROID_SIGNING_*` 环境变量，防止本地预览包意外使用正式密钥。调试签名适合测试和侧载，不提供稳定升级链；未来准备上架应用商店时，需要另行创建并安全保管正式 keystore。
 
 在 Windows 本地构建 APK 时，Flutter 插件需要系统允许创建符号链接，通常需要开启 Windows“开发者模式”。不希望修改系统设置时，可在 GitHub Actions 中手动运行 `Build preview packages` 工作流完成 Linux 构建。
 

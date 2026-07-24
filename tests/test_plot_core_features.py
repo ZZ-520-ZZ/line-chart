@@ -15,6 +15,62 @@ from plot_core import ChartSpec, CurveSpec, parse_uncertainty_text, render_chart
 
 
 class PlotCoreFeatureTests(unittest.TestCase):
+    def test_axes_cross_at_data_origin_when_zero_is_visible(self):
+        figure = Figure(figsize=(5, 3), dpi=100)
+        axis = figure.add_subplot(111)
+        spec = ChartSpec(
+            x_values=[-1, 0, 1],
+            curves=[CurveSpec(
+                values=[-2, 0, 2],
+                label="origin",
+                color="#d62728",
+                marker="o")],
+            show_grid=False,
+            show_legend=False)
+
+        render_chart(axis, spec)
+
+        self.assertEqual(axis.spines["left"].get_position(), ("data", 0))
+        self.assertEqual(axis.spines["bottom"].get_position(), ("data", 0))
+        self.assertEqual(axis.xaxis.label.get_position(), (0.5, -0.1))
+        self.assertEqual(axis.yaxis.label.get_position(), (-0.1, 0.5))
+
+    def test_axes_remain_at_frame_edges_when_zero_is_outside_view(self):
+        figure = Figure(figsize=(5, 3), dpi=100)
+        axis = figure.add_subplot(111)
+        spec = ChartSpec(
+            x_values=[1, 2, 3],
+            curves=[CurveSpec(
+                values=[4, 5, 6],
+                label="positive range",
+                color="#1f77b4",
+                marker="s")],
+            show_grid=False,
+            show_legend=False)
+
+        render_chart(axis, spec)
+
+        self.assertEqual(axis.spines["left"].get_position(), ("outward", 0))
+        self.assertEqual(axis.spines["bottom"].get_position(), ("outward", 0))
+
+    def test_both_axes_remain_at_edges_when_only_one_zero_axis_is_visible(self):
+        figure = Figure(figsize=(5, 3), dpi=100)
+        axis = figure.add_subplot(111)
+        spec = ChartSpec(
+            x_values=[-1, 0, 1],
+            curves=[CurveSpec(
+                values=[4, 5, 6],
+                label="partial origin range",
+                color="#2ca02c",
+                marker="^")],
+            show_grid=False,
+            show_legend=False)
+
+        render_chart(axis, spec)
+
+        self.assertEqual(axis.spines["left"].get_position(), ("outward", 0))
+        self.assertEqual(axis.spines["bottom"].get_position(), ("outward", 0))
+
     def test_uncertainty_text_supports_scalar_or_point_values(self):
         self.assertEqual(parse_uncertainty_text("0.2", 3, "Y不确定度"), [0.2, 0.2, 0.2])
         self.assertEqual(parse_uncertainty_text("0.1,0.2,0.3", 3, "Y不确定度"), [0.1, 0.2, 0.3])

@@ -335,6 +335,8 @@ def render_chart(ax, spec):
         right=0.97,
         top=0.86 if compact else 0.90,
         bottom=(0.38 if compact else 0.25) if spec.note else (0.20 if compact else 0.15))
+    ax.xaxis.set_label_coords(0.5, -0.16 if compact else -0.10)
+    ax.yaxis.set_label_coords(-0.16 if compact else -0.10, 0.5)
 
     x_min, x_max = spec.x_limits
     y_min, y_max = spec.y_limits
@@ -347,6 +349,15 @@ def render_chart(ax, spec):
     ax.tick_params(axis='y', direction=spec.y_tick_direction)
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
+
+    visible_x_min, visible_x_max = ax.get_xlim()
+    visible_y_min, visible_y_max = ax.get_ylim()
+    origin_is_visible = (
+        visible_x_min <= 0 <= visible_x_max
+        and visible_y_min <= 0 <= visible_y_max)
+    spine_position = ('data', 0) if origin_is_visible else ('outward', 0)
+    ax.spines['left'].set_position(spine_position)
+    ax.spines['bottom'].set_position(spine_position)
 
     if spec.show_grid:
         ax.grid(True, linestyle='--', alpha=0.7)

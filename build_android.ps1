@@ -3,6 +3,14 @@ $env:PYTHONUTF8 = "1"
 $env:PYTHONIOENCODING = "utf-8"
 $productName = "Plotforge"
 
+# Preview APKs intentionally use Flet's default debug signing.
+@(
+    "FLET_ANDROID_SIGNING_KEY_STORE",
+    "FLET_ANDROID_SIGNING_KEY_STORE_PASSWORD",
+    "FLET_ANDROID_SIGNING_KEY_PASSWORD",
+    "FLET_ANDROID_SIGNING_KEY_ALIAS"
+) | ForEach-Object { Remove-Item "Env:$_" -ErrorAction SilentlyContinue }
+
 $flet = Join-Path $PSScriptRoot ".venv\Scripts\flet.exe"
 if (-not (Test-Path $flet)) {
     throw "Create .venv and install requirements.txt first."
