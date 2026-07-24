@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from io import BytesIO
+from math import isfinite
 from pathlib import Path
 
 from matplotlib import font_manager, rcParams
@@ -13,6 +14,7 @@ from plot_core import (
     ChartSpec,
     CurveSpec,
     FitResult,
+    generate_series_values,
     parse_axis_limits,
     parse_numeric_data,
     parse_precision,
@@ -114,6 +116,38 @@ class PlotForm:
         if len(self.curves) <= 1:
             raise ValueError("至少保留一条曲线")
         del self.curves[index]
+
+    def apply_generated_series(
+        self,
+        target: str,
+        series_type: str,
+        start_text: str,
+        end_text: str,
+        step_or_ratio_text: str,
+    ) -> list[float]:
+        values = generate_series_from_text(
+            series_type,
+            start_text,
+            end_text,
+            step_or_ratio_text,
+        )
+        formatted = _format_values(values)
+        if target == "x":
+            self.x_data = formatted
+            return values
+
+        prefix = "curve:"
+        if not target.startswith(prefix):
+            raise ValueError("请选择有效的数列写入目标")
+        try:
+            curve_index = int(target[len(prefix):])
+        except ValueError:
+            raise ValueError("所选曲线已不存在，请重新选择写入目标") from None
+        if not 0 <= curve_index < len(self.curves):
+            raise ValueError("所选曲线已不存在，请重新选择写入目标")
+        curve = self.curves[curve_index]
+        curve.data = formatted
+        return values
 
     def build_chart_spec(self) -> ChartSpec:
         x_values = parse_numeric_data(self.x_data)
@@ -261,6 +295,29 @@ def format_fit_results(results: tuple[FitResult, ...]) -> str:
             f"R²: {result.r_squared:.8g}\n相关系数: {result.correlation:.8g}"
         )
     return "\n\n".join(blocks)
+
+
+def generate_series_from_text(
+    series_type: str,
+    start_text: str,
+    end_text: str,
+    step_or_ratio_text: str,
+) -> list[float]:
+    fields = (
+        ("起始值", start_text),
+        ("结束值", end_text),
+        ("步长或公比", step_or_ratio_text),
+    )
+    parsed = []
+    for label, text in fields:
+        try:
+            value = float(text)
+        except (TypeError, ValueError):
+            raise ValueError(f"{label}必须是数字") from None
+        if not isfinite(value):
+            raise ValueError(f"{label}必须是有限数字")
+        parsed.append(value)
+    return generate_series_values(series_type, *parsed)
 
 
 def _format_values(values) -> str:

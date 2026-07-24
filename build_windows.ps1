@@ -21,3 +21,11 @@ if (-not (Test-Path $flet)) {
 if ($LASTEXITCODE -ne 0) {
     throw "Windows build failed."
 }
+
+$appDirectory = Join-Path $PSScriptRoot "dist\windows\$productName"
+$archivePath = Join-Path $PSScriptRoot "dist\$productName-Windows.zip"
+if (-not (Test-Path $appDirectory)) {
+    throw "Windows build output was not found: $appDirectory"
+}
+Compress-Archive -Path $appDirectory -DestinationPath $archivePath -CompressionLevel Optimal -Force
+Write-Host "Windows release package: $archivePath"

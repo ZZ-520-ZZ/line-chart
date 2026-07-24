@@ -10,6 +10,7 @@ from app_state import (
     CurveForm,
     PlotForm,
     format_fit_results,
+    generate_series_from_text,
 )
 
 
@@ -332,6 +333,46 @@ class PlotApplication:
                 ),
             ],
         )
+        self.series_type = self._dropdown(
+            value="arithmetic",
+            label="数列类型",
+            options=_options((("arithmetic", "等差数列"), ("geometric", "等比数列"))),
+            col={"xs": 12, "sm": 6},
+        )
+        self.series_target = self._dropdown(
+            value="x",
+            label="写入目标",
+            options=[],
+            col={"xs": 12, "sm": 6},
+        )
+        self.series_start = self._text_field(
+            value="0",
+            label="起始值",
+            col={"xs": 12, "sm": 4},
+        )
+        self.series_end = self._text_field(
+            value="10",
+            label="结束值",
+            col={"xs": 12, "sm": 4},
+        )
+        self.series_parameter = self._text_field(
+            value="1",
+            label="步长 / 公比",
+            col={"xs": 12, "sm": 4},
+        )
+        self.series_preview = self._text_field(
+            value="尚未生成",
+            label="生成预览",
+            read_only=True,
+            multiline=True,
+            min_lines=3,
+            max_lines=5,
+        )
+        self.series_status = ft.Text(
+            "最多生成 1000 个数据点",
+            size=12,
+            color=ft.Colors.ON_SURFACE_VARIANT,
+        )
         self._rebuild_curve_editors()
 
     @staticmethod
@@ -484,6 +525,7 @@ class PlotApplication:
         )
         self.views = [
             self._data_view(),
+            self._series_view(),
             self._chart_view(),
             self._settings_view(),
             self._fit_view(),
@@ -504,6 +546,7 @@ class PlotApplication:
             on_change=self.change_view,
             destinations=[
                 ft.NavigationBarDestination(icon=ft.Icons.TABLE_CHART_OUTLINED, label="数据"),
+                ft.NavigationBarDestination(icon=ft.Icons.FORMAT_LIST_NUMBERED, label="数列"),
                 ft.NavigationBarDestination(icon=ft.Icons.SHOW_CHART, label="图表"),
                 ft.NavigationBarDestination(icon=ft.Icons.TUNE, label="设置"),
                 ft.NavigationBarDestination(icon=ft.Icons.FUNCTIONS, label="拟合"),
@@ -568,6 +611,7 @@ class PlotApplication:
         self._rebuild_curve_editors()
         self.views = [
             self._data_view(),
+            self._series_view(),
             self._chart_view(),
             self._settings_view(),
             self._fit_view(),
@@ -632,6 +676,54 @@ class PlotApplication:
             ],
             spacing=10,
             horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
+            expand=True,
+        )
+
+    def _series_view(self):
+        return ft.ListView(
+            controls=[
+                self._section_title(
+                    ft.Icons.FORMAT_LIST_NUMBERED,
+                    "数列生成",
+                    "生成等差或等比数列，并写入 X 数据或任意 Y 曲线",
+                ),
+                ft.ResponsiveRow(
+                    [self.series_type, self.series_target],
+                    spacing=8,
+                    run_spacing=8,
+                ),
+                ft.ResponsiveRow(
+                    [self.series_start, self.series_end, self.series_parameter],
+                    spacing=8,
+                    run_spacing=8,
+                ),
+                ft.Row(
+                    [
+                        ft.OutlinedButton(
+                            content=ft.Text("预览"),
+                            icon=ft.Icons.PREVIEW,
+                            on_click=self.preview_series,
+                            style=self._button_style(),
+                            expand=True,
+                        ),
+                        ft.FilledButton(
+                            content=ft.Text("生成并写入"),
+                            icon=ft.Icons.INPUT,
+                            on_click=self.apply_series,
+                            style=self._button_style(True),
+                            expand=True,
+                        ),
+                    ],
+                    spacing=10,
+                ),
+                self.series_preview,
+                ft.Row(
+                    [ft.Icon(ft.Icons.INFO_OUTLINE, size=16), self.series_status],
+                    spacing=6,
+                ),
+            ],
+            spacing=16,
+            padding=ft.Padding.only(bottom=16),
             expand=True,
         )
 
@@ -700,12 +792,79 @@ class PlotApplication:
             CurveEditor(self, index, curve) for index, curve in enumerate(self.form.curves)
         ]
         self.curves_column.controls = [editor.control for editor in self.curve_editors]
+        self._refresh_series_targets()
+
+    def _refresh_series_targets(self):
+        options = [("x", "X 数据")]
+        options.extend(
+            (f"curve:{index}", f"Y 曲线 {index + 1} · {curve.label or '未命名'}")
+            for index, curve in enumerate(self.form.curves)
+        )
+        valid_targets = {key for key, _ in options}
+        self.series_target.options = _options(tuple(options))
+        if self.series_target.value not in valid_targets:
+            self.series_target.value = "x"
+
+    def _series_values(self):
+        return generate_series_from_text(
+            self.series_type.value or "arithmetic",
+            self.series_start.value or "",
+            self.series_end.value or "",
+            self.series_parameter.value or "",
+        )
+
+    @staticmethod
+    def _series_preview_text(values):
+        shown = ", ".join(f"{float(value):.12g}" for value in values[:12])
+        if len(values) > 12:
+            shown += ", ..."
+        return shown
+
+    def preview_series(self, _):
+        try:
+            values = self._series_values()
+        except ValueError as exc:
+            self.notify(str(exc), error=True)
+            return
+        self.series_preview.value = self._series_preview_text(values)
+        self.series_status.value = f"已生成 {len(values)} 个数据点，尚未写入"
+        self.series_preview.update()
+        self.series_status.update()
+
+    def apply_series(self, _):
+        try:
+            self.sync_form()
+            values = self.form.apply_generated_series(
+                self.series_target.value or "",
+                self.series_type.value or "arithmetic",
+                self.series_start.value or "",
+                self.series_end.value or "",
+                self.series_parameter.value or "",
+            )
+        except ValueError as exc:
+            self.notify(str(exc), error=True)
+            return
+
+        target = self.series_target.value or "x"
+        if target == "x":
+            self.x_data.value = self.form.x_data
+            target_name = "X 数据"
+        else:
+            curve_index = int(target.split(":", 1)[1])
+            self.curve_editors[curve_index].data.value = self.form.curves[curve_index].data
+            target_name = self.form.curves[curve_index].label or f"Y 曲线 {curve_index + 1}"
+        self.series_preview.value = self._series_preview_text(values)
+        self.series_status.value = f"已将 {len(values)} 个数据点写入 {target_name}"
+        self.series_preview.update()
+        self.series_status.update()
+        self.notify(f"数列已写入 {target_name}")
 
     def add_curve(self, _):
         self.sync_form()
         self.form.add_curve()
         self._rebuild_curve_editors()
         self.curves_column.update()
+        self.series_target.update()
 
     def remove_curve(self, index: int):
         try:
@@ -716,6 +875,7 @@ class PlotApplication:
             return
         self._rebuild_curve_editors()
         self.curves_column.update()
+        self.series_target.update()
 
     def sync_form(self):
         self.form.title = self.title.value or ""
@@ -771,7 +931,7 @@ class PlotApplication:
         self.preview_host.content = self.preview
         self.fit_results.value = format_fit_results(fits)
         self.status.value = f"{len(spec.x_values)} 个数据点 · {len(spec.curves)} 条曲线 · {len(fits)} 个拟合结果"
-        self._show_view(1)
+        self._show_view(2)
 
     async def import_data(self, _):
         files = await self.file_picker.pick_files(

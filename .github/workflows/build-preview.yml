@@ -1,0 +1,64 @@
+name: Build preview packages
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  android:
+    name: Android preview APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    env:
+      PYTHONUTF8: "1"
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: python -m pip install --upgrade pip && python -m pip install -r requirements.txt
+
+      - name: Run unit and regression tests
+        run: python run_tests.py
+
+      - name: Run real plotting cases
+        run: python cross_platform_smoke_test.py
+
+      - name: Build Android APK
+        run: |
+          flet build apk . \
+            --yes \
+            --project line_chart \
+            --artifact line_chart \
+            --product 绘图工具 \
+            --org com.zz520zz \
+            --arch arm64-v8a \
+            --android-extract-packages matplotlib \
+            --android-legacy-packaging \
+            --exclude .flet .venv .git build dist tests docs __pycache__ \
+              gui_smoke_test.py test_regressions.py cross_platform_smoke_test.py run_tests.py \
+            --no-compile-app \
+            --no-rich-output
+
+      - name: Prepare artifact
+        run: |
+          mkdir -p dist
+          cp build/apk/line_chart.apk "dist/绘图工具.apk"
+
+      - name: Upload Android package
+        uses: actions/upload-artifact@v4
+        with:
+          name: preview-android-apk
+          path: dist/绘图工具.apk
+          if-no-files-found: error
+          retention-days: 7

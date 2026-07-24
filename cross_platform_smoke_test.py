@@ -30,7 +30,6 @@ def main():
         x_unit="s",
         y_label="位移",
         y_unit="m",
-        x_data="0,1,2,3,4",
         x_uncertainty="0.02",
         curves=[
             CurveForm(
@@ -41,6 +40,7 @@ def main():
             )
         ],
     )
+    linear.apply_generated_series("x", "arithmetic", "0", "4", "1")
     linear_fits = render_case("linear_errorbar", linear, 1)
     assert abs(linear_fits[0].parameters["slope"] - 2.0) < 1e-10
 

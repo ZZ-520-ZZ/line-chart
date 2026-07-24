@@ -6,7 +6,7 @@ from pathlib import Path
 WORK_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(WORK_DIR))
 
-from app_state import CurveForm, PlotForm, format_fit_results
+from app_state import CurveForm, PlotForm, format_fit_results, generate_series_from_text
 
 
 class PlotFormTests(unittest.TestCase):
@@ -74,6 +74,39 @@ class PlotFormTests(unittest.TestCase):
         self.assertEqual(table.x_label, "时间")
         self.assertEqual(form.x_data, "0,1")
         self.assertEqual([curve.label for curve in form.curves], ["实验组", "对照组"])
+
+    def test_generated_arithmetic_series_can_fill_x_data(self):
+        form = PlotForm(curves=[CurveForm(data="1,2,3,4,5")])
+
+        values = form.apply_generated_series("x", "arithmetic", "0", "2", "0.5")
+
+        self.assertEqual(values, [0.0, 0.5, 1.0, 1.5, 2.0])
+        self.assertEqual(form.x_data, "0,0.5,1,1.5,2")
+
+    def test_generated_geometric_series_can_fill_selected_curve(self):
+        form = PlotForm(
+            x_data="0,1,2,3,4",
+            curves=[CurveForm(label="实验组"), CurveForm(label="对照组")],
+        )
+
+        values = form.apply_generated_series("curve:1", "geometric", "1", "16", "2")
+
+        self.assertEqual(values, [1.0, 2.0, 4.0, 8.0, 16.0])
+        self.assertEqual(form.curves[0].data, "")
+        self.assertEqual(form.curves[1].data, "1,2,4,8,16")
+
+    def test_generated_series_rejects_stale_curve_target_without_mutation(self):
+        form = PlotForm(curves=[CurveForm(data="原始数据")])
+
+        for target in ("curve:4", "curve:-1"):
+            with self.subTest(target=target), self.assertRaisesRegex(ValueError, "曲线已不存在"):
+                form.apply_generated_series(target, "arithmetic", "0", "2", "1")
+
+        self.assertEqual(form.curves[0].data, "原始数据")
+
+    def test_generated_series_text_rejects_non_finite_values(self):
+        with self.assertRaisesRegex(ValueError, "有限数字"):
+            generate_series_from_text("arithmetic", "0", "inf", "1")
 
 
 if __name__ == "__main__":
