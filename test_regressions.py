@@ -209,7 +209,16 @@ class PlotToolRegressionTests(unittest.TestCase):
             str(end),
             str(step),
         ]
-        completed = subprocess.run(command, capture_output=True, text=True, timeout=timeout)
+        child_env = os.environ.copy()
+        child_env["PYTHONIOENCODING"] = "utf-8"
+        completed = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            env=child_env,
+            timeout=timeout,
+        )
         payload = json.loads(completed.stdout.strip().splitlines()[-1])
         return completed.returncode, payload
 

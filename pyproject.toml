@@ -1,0 +1,26 @@
+[project]
+name = "line-chart"
+version = "1.0.0"
+description = "面向物理实验的跨平台曲线绘图工具"
+requires-python = ">=3.12"
+dependencies = [
+    "flet==0.86.2",
+    "matplotlib==3.10.9",
+    "numpy==2.4.6",
+    "openpyxl==3.1.5",
+    "Pillow==12.2.0",
+]
+
+[tool.flet]
+org = "com.zz520zz"
+product = "绘图工具"
+company = "ZZ-520-ZZ"
+description = "物理实验数据、误差棒与拟合绘图工具"
+
+[tool.flet.app]
+path = "."
+module = "main"
+
+[tool.flet.android]
+extract_packages = ["matplotlib"]
+min_sdk_version = 24
