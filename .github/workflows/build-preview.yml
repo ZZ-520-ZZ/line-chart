@@ -34,6 +34,17 @@ jobs:
       - name: Run real plotting cases
         run: python cross_platform_smoke_test.py
 
+      - name: Seed Gradle distribution cache
+        env:
+          GRADLE_WRAPPER_URL: https://github.com/gradle/gradle-distributions/releases/download/v8.14.0/gradle-8.14-all.zip
+        run: |
+          CACHE_KEY="$(python -c "import hashlib, numpy as np, os; print(np.base_repr(int(hashlib.md5(os.environ['GRADLE_WRAPPER_URL'].encode()).hexdigest(), 16), 36).lower())")"
+          CACHE_DIR="$HOME/.gradle/wrapper/dists/gradle-8.14-all/$CACHE_KEY"
+          mkdir -p "$CACHE_DIR"
+          curl --fail --location --retry 5 --retry-delay 10 --retry-all-errors \
+            https://downloads.gradle.org/distributions/gradle-8.14-all.zip \
+            --output "$CACHE_DIR/gradle-8.14-all.zip"
+
       # No custom keystore is supplied: preview APKs intentionally use debug signing.
       - name: Build debug-signed Android preview APK
         run: |
