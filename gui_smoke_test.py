@@ -12,7 +12,7 @@ from PIL import ImageGrab
 
 TOOL_PATH = Path(os.environ.get(
     "PLOT_TOOL_PATH",
-    Path(__file__).with_name("绘图工具1.0.py")))
+    Path(__file__).with_name("绘图工具.py")))
 
 
 def load_module():

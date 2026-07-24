@@ -52,7 +52,7 @@ python -m pip install -r requirements.txt
 ## 运行
 
 ```bash
-python "绘图工具1.0.py"
+python "绘图工具.py"
 ```
 
 ## 数据输入
@@ -113,11 +113,11 @@ python gui_smoke_test.py
 
 | 文件 | 职责 |
 | --- | --- |
-| `绘图工具1.0.py` | Tkinter 界面与用户操作协调 |
+| `绘图工具.py` | Tkinter 界面与用户操作协调 |
 | `plot_core.py` | 数据校验、数列生成、拟合与图表渲染 |
 | `data_io.py` | CSV 和 Excel 导入 |
 | `project_io.py` | `.pplot` 工程保存与恢复 |
 | `test_regressions.py` | 历史缺陷回归测试 |
 | `tests/` | 核心功能单元测试 |
 
-运行程序时，请保持 `绘图工具1.0.py`、`plot_core.py`、`data_io.py` 和 `project_io.py` 位于同一目录。
+运行程序时，请保持 `绘图工具.py`、`plot_core.py`、`data_io.py` 和 `project_io.py` 位于同一目录。
