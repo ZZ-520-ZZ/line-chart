@@ -170,7 +170,7 @@ Windows 上还可以运行 Tkinter 真实窗口测试：
 python gui_smoke_test.py
 ```
 
-GitHub Actions 会在每次 push 和 Pull Request 时，使用 Python 3.12 在 Windows 与 Ubuntu 上自动运行 34 项测试和三组真实绘图测试，并上传生成的图片。`Build preview packages` 工作流可由维护者手动触发，在 Ubuntu 上重复测试并构建调试签名的 Android APK；它不会自动创建 Release 或上传应用商店。
+GitHub Actions 会在每次 push 和 Pull Request 时，使用 Python 3.12 在 Windows 与 Ubuntu 上自动运行 34 项测试和三组真实绘图测试，并上传生成的图片。`Build preview packages` 工作流可由维护者手动触发，在 Ubuntu 上重复测试、构建 Android APK，并使用 `apksigner` 验证证书主体为 `CN=Android Debug`；它不会自动创建 Release 或上传应用商店。
 
 ## 构建应用
 

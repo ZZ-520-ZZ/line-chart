@@ -52,6 +52,15 @@ jobs:
             --no-compile-app \
             --no-rich-output
 
+      - name: Verify Android debug signature
+        run: |
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+          test -n "$APKSIGNER"
+          "$APKSIGNER" verify --verbose --print-certs build/apk/plotforge.apk
+          SIGNER_DN="$("$APKSIGNER" verify --print-certs build/apk/plotforge.apk | sed -n 's/^Signer #1 certificate DN: //p')"
+          echo "Android signer: $SIGNER_DN"
+          echo "$SIGNER_DN" | grep -F "CN=Android Debug"
+
       - name: Prepare artifact
         run: |
           mkdir -p dist
