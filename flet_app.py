@@ -14,6 +14,9 @@ from app_state import (
 
 
 APP_NAME = "绘图工具"
+PRIMARY = "#006B68"
+PRIMARY_DARK = "#66D4CF"
+FIELD_RADIUS = 6
 FIT_OPTIONS = (
     ("none", "不拟合"),
     ("linear", "线性拟合"),
@@ -41,38 +44,43 @@ class CurveEditor:
         self.app = app
         self.index = index
         self.color = curve.color
-        self.label = ft.TextField(
+        self.label = app._text_field(
             value=curve.label,
             label="图例名称",
-            dense=True,
             expand=True,
         )
-        self.visible = ft.Switch(value=curve.visible, label="显示", adaptive=True)
-        self.data = ft.TextField(
+        self.visible = ft.Switch(
+            key=f"curve-visible-{index}-{'dark' if app.dark_mode else 'light'}",
+            value=curve.visible,
+            label="显示",
+            adaptive=True,
+            label_text_style=ft.TextStyle(
+                color=app._foreground(variant=True),
+                foreground=ft.Paint(color=app._foreground(variant=True)),
+            ),
+        )
+        self.data = app._text_field(
             value=curve.data,
             label="Y 数据（逗号分隔）",
             multiline=True,
             min_lines=2,
             max_lines=4,
         )
-        self.uncertainty = ft.TextField(
+        self.uncertainty = app._text_field(
             value=curve.uncertainty,
             label="Y 不确定度（单值或列表）",
-            dense=True,
             col={"xs": 12, "sm": 6},
         )
-        self.fit_type = ft.Dropdown(
+        self.fit_type = app._dropdown(
             value=curve.fit_type,
             label="拟合方式",
             options=_options(FIT_OPTIONS),
-            dense=True,
             col={"xs": 6, "sm": 3},
         )
-        self.marker = ft.Dropdown(
+        self.marker = app._dropdown(
             value=curve.marker,
             label="数据点",
             options=_options(MARKER_OPTIONS),
-            dense=True,
             col={"xs": 6, "sm": 3},
         )
         self.swatches = []
@@ -81,7 +89,7 @@ class CurveEditor:
             elevation=0,
             variant=ft.CardVariant.OUTLINED,
             content=ft.Container(
-                padding=12,
+                padding=16,
                 content=ft.Column(
                     [
                         ft.Row(
@@ -105,7 +113,7 @@ class CurveEditor:
                         ft.Text("曲线颜色", size=12, color=ft.Colors.ON_SURFACE_VARIANT),
                         self.color_row,
                     ],
-                    spacing=9,
+                    spacing=12,
                 ),
             ),
         )
@@ -114,8 +122,8 @@ class CurveEditor:
         controls = []
         for color in CURVE_COLORS:
             swatch = ft.Container(
-                width=30,
-                height=30,
+                width=32,
+                height=32,
                 bgcolor=color,
                 border_radius=4,
                 border=ft.Border.all(
@@ -157,54 +165,104 @@ class PlotApplication:
         self.file_picker = ft.FilePicker()
         self.curve_editors: list[CurveEditor] = []
         self.last_image: bytes | None = None
+        self.dark_mode = False
         self._create_controls()
 
+    def _foreground(self, variant: bool = False):
+        if self.dark_mode:
+            return "#BEC9C7" if variant else "#E0E4E2"
+        return "#3F4947" if variant else "#181D1C"
+
+    def _text_style(self, variant: bool = False, **kwargs):
+        color = self._foreground(variant)
+        return ft.TextStyle(color=color, foreground=ft.Paint(color=color), **kwargs)
+
+    @staticmethod
+    def _text_field(**kwargs):
+        options = {
+            "dense": True,
+            "filled": True,
+            "fill_color": ft.Colors.SURFACE_CONTAINER_LOWEST,
+            "border_radius": FIELD_RADIUS,
+            "border_color": ft.Colors.OUTLINE_VARIANT,
+            "focused_border_color": PRIMARY,
+            "focused_border_width": 2,
+            "content_padding": ft.Padding.symmetric(horizontal=14, vertical=12),
+        }
+        options.update(kwargs)
+        return ft.TextField(**options)
+
+    @staticmethod
+    def _dropdown(**kwargs):
+        options = {
+            "dense": True,
+            "filled": True,
+            "fill_color": ft.Colors.SURFACE_CONTAINER_LOWEST,
+            "border_radius": FIELD_RADIUS,
+            "border_color": ft.Colors.OUTLINE_VARIANT,
+            "focused_border_color": PRIMARY,
+            "focused_border_width": 2,
+            "content_padding": ft.Padding.symmetric(horizontal=14, vertical=10),
+        }
+        options.update(kwargs)
+        return ft.Dropdown(**options)
+
     def _create_controls(self):
-        self.title = ft.TextField(label="图表标题", value=self.form.title)
-        self.note = ft.TextField(
+        self.title = self._text_field(label="图表标题", value=self.form.title)
+        self.note = self._text_field(
             label="图表说明",
             value=self.form.note,
             multiline=True,
             min_lines=2,
             max_lines=4,
         )
-        self.x_label = ft.TextField(label="X 轴名称", value=self.form.x_label, col=8)
-        self.x_unit = ft.TextField(label="X 单位", value=self.form.x_unit, col=4)
-        self.y_label = ft.TextField(label="Y 轴名称", value=self.form.y_label, col=8)
-        self.y_unit = ft.TextField(label="Y 单位", value=self.form.y_unit, col=4)
-        self.x_data = ft.TextField(
+        self.x_label = self._text_field(label="X 轴名称", value=self.form.x_label, col=8)
+        self.x_unit = self._text_field(label="X 单位", value=self.form.x_unit, col=4)
+        self.y_label = self._text_field(label="Y 轴名称", value=self.form.y_label, col=8)
+        self.y_unit = self._text_field(label="Y 单位", value=self.form.y_unit, col=4)
+        self.x_data = self._text_field(
             label="X 数据（逗号分隔）",
             value=self.form.x_data,
             multiline=True,
             min_lines=2,
             max_lines=4,
         )
-        self.x_uncertainty = ft.TextField(
+        self.x_uncertainty = self._text_field(
             label="X 不确定度（单值或列表）",
             value=self.form.x_uncertainty,
         )
-        self.x_min = ft.TextField(label="X 最小值", col=6)
-        self.x_max = ft.TextField(label="X 最大值", col=6)
-        self.y_min = ft.TextField(label="Y 最小值", col=6)
-        self.y_max = ft.TextField(label="Y 最大值", col=6)
+        self.x_min = self._text_field(label="X 最小值", col=6)
+        self.x_max = self._text_field(label="X 最大值", col=6)
+        self.y_min = self._text_field(label="Y 最小值", col=6)
+        self.y_max = self._text_field(label="Y 最大值", col=6)
         direction_options = _options((("in", "向内"), ("out", "向外"), ("inout", "双向")))
-        self.x_tick_direction = ft.Dropdown(
+        self.x_tick_direction = self._dropdown(
             label="X 刻度方向", value="in", options=direction_options, col=6
         )
-        self.y_tick_direction = ft.Dropdown(
+        self.y_tick_direction = self._dropdown(
             label="Y 刻度方向",
             value="in",
             options=_options((("in", "向内"), ("out", "向外"), ("inout", "双向"))),
             col=6,
         )
-        self.precision = ft.Dropdown(
+        self.precision = self._dropdown(
             label="小数位数",
             value=self.form.precision,
             options=_options(tuple((str(value), str(value)) for value in range(11))),
             col=6,
         )
-        self.show_grid = ft.Switch(value=True, label="显示网格", adaptive=True)
-        self.show_legend = ft.Switch(value=True, label="显示图例", adaptive=True)
+        self.show_grid = ft.Switch(
+            value=True,
+            label="显示网格",
+            adaptive=True,
+            label_text_style=self._text_style(variant=True),
+        )
+        self.show_legend = ft.Switch(
+            value=True,
+            label="显示图例",
+            adaptive=True,
+            label_text_style=self._text_style(variant=True),
+        )
         self.curves_column = ft.Column(spacing=10)
         self.preview = ft.Image(
             src="",
@@ -212,11 +270,25 @@ class PlotApplication:
             expand=True,
             semantics_label="实验曲线预览",
         )
+        self.preview_title = ft.Text(
+            key=f"preview-title-{'dark' if self.dark_mode else 'light'}",
+            value="等待绘图",
+            style=self._text_style(size=16, weight=ft.FontWeight.W_600),
+        )
         self.preview_placeholder = ft.Column(
             [
-                ft.Icon(ft.Icons.SHOW_CHART, size=52, color=ft.Colors.OUTLINE),
-                ft.Text("输入数据后点击绘图", color=ft.Colors.ON_SURFACE_VARIANT),
+                ft.Container(
+                    content=ft.Icon(ft.Icons.SHOW_CHART, size=36, color=PRIMARY),
+                    width=64,
+                    height=64,
+                    alignment=ft.Alignment.CENTER,
+                    bgcolor=ft.Colors.PRIMARY_CONTAINER,
+                    border_radius=32,
+                ),
+                self.preview_title,
+                ft.Text("输入实验数据后点击绘图", size=12, color=ft.Colors.ON_SURFACE_VARIANT),
             ],
+            spacing=8,
             alignment=ft.MainAxisAlignment.CENTER,
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
             expand=True,
@@ -224,7 +296,7 @@ class PlotApplication:
         self.preview_host = ft.Container(
             content=self.preview_placeholder,
             expand=True,
-            bgcolor=ft.Colors.SURFACE_CONTAINER_LOW,
+            bgcolor=ft.Colors.SURFACE_CONTAINER_LOWEST,
             border=ft.Border.all(1, ft.Colors.OUTLINE_VARIANT),
             border_radius=6,
             padding=8,
@@ -233,9 +305,15 @@ class PlotApplication:
             "绘制并选择拟合方式后，参数将显示在这里。",
             selectable=True,
             font_family="NotoSansSC",
+            color=self._foreground(variant=True),
         )
         self.status = ft.Text("尚未绘图", size=12, color=ft.Colors.ON_SURFACE_VARIANT)
-        self.export_format = ft.Dropdown(
+        self.theme_button = ft.IconButton(
+            icon=ft.Icons.DARK_MODE_OUTLINED,
+            tooltip="切换深色模式",
+            on_click=self.toggle_theme,
+        )
+        self.export_format = self._dropdown(
             value="png",
             label="文件格式",
             options=_options((("png", "PNG"), ("jpg", "JPG"), ("svg", "SVG"), ("pdf", "PDF"))),
@@ -256,25 +334,135 @@ class PlotApplication:
         )
         self._rebuild_curve_editors()
 
+    @staticmethod
+    def _button_style(primary: bool = False):
+        if primary:
+            return ft.ButtonStyle(
+                bgcolor={
+                    ft.ControlState.DEFAULT: PRIMARY,
+                    ft.ControlState.HOVERED: "#005B58",
+                    ft.ControlState.PRESSED: "#004D4A",
+                    ft.ControlState.DISABLED: ft.Colors.SURFACE_CONTAINER_HIGHEST,
+                },
+                color={
+                    ft.ControlState.DEFAULT: "#FFFFFF",
+                    ft.ControlState.DISABLED: ft.Colors.ON_SURFACE_VARIANT,
+                },
+                shape=ft.RoundedRectangleBorder(radius=FIELD_RADIUS),
+                padding=ft.Padding.symmetric(horizontal=18, vertical=13),
+            )
+        return ft.ButtonStyle(
+            color=ft.Colors.ON_SURFACE,
+            side=ft.BorderSide(1, ft.Colors.OUTLINE_VARIANT),
+            shape=ft.RoundedRectangleBorder(radius=FIELD_RADIUS),
+            padding=ft.Padding.symmetric(horizontal=16, vertical=12),
+        )
+
+    @staticmethod
+    def _theme(dark: bool = False):
+        scheme = ft.ColorScheme(
+            primary=PRIMARY_DARK if dark else PRIMARY,
+            on_primary="#003735" if dark else "#FFFFFF",
+            primary_container="#00504E" if dark else "#C6EFEC",
+            on_primary_container="#8CF2ED" if dark else "#00201F",
+            secondary="#E8C453" if dark else "#725B00",
+            on_secondary="#3C2F00" if dark else "#FFFFFF",
+            secondary_container="#564500" if dark else "#FFE080",
+            on_secondary_container="#FFE48F" if dark else "#241A00",
+            error="#FFB4AB" if dark else "#BA1A1A",
+            on_error="#690005" if dark else "#FFFFFF",
+            error_container="#93000A" if dark else "#FFDAD6",
+            on_error_container="#FFDAD6" if dark else "#410002",
+            surface="#6C7674" if dark else "#F7FAF9",
+            on_surface="#FFFFFF" if dark else "#181D1C",
+            on_surface_variant="#F1F4F3" if dark else "#3F4947",
+            outline="#E0E4E2" if dark else "#6F7977",
+            outline_variant="#46504E" if dark else "#BEC9C7",
+            surface_container_lowest="#6C7674" if dark else "#FFFFFF",
+            surface_container_low="#626C6A" if dark else "#F1F4F3",
+            surface_container="#596361" if dark else "#EBEEED",
+            surface_container_high="#505A58" if dark else "#E5E9E7",
+            surface_container_highest="#46504E" if dark else "#DFE3E1",
+        )
+        text_theme = ft.TextTheme(
+            title_large=ft.TextStyle(
+                size=20, weight=ft.FontWeight.W_600, color=scheme.on_surface
+            ),
+            title_medium=ft.TextStyle(
+                size=16, weight=ft.FontWeight.W_600, color=scheme.on_surface
+            ),
+            body_large=ft.TextStyle(size=15, color=scheme.on_surface),
+            body_medium=ft.TextStyle(size=14, color=scheme.on_surface),
+            body_small=ft.TextStyle(size=12, color=scheme.on_surface_variant),
+            label_large=ft.TextStyle(
+                size=14, weight=ft.FontWeight.W_600, color=scheme.on_surface
+            ),
+            label_medium=ft.TextStyle(size=12, color=scheme.on_surface_variant),
+        )
+        return ft.Theme(
+            use_material3=True,
+            font_family="NotoSansSC",
+            color_scheme=scheme,
+            scaffold_bgcolor=scheme.surface,
+            appbar_theme=ft.AppBarTheme(
+                bgcolor=scheme.surface_container_lowest,
+                color=scheme.on_surface,
+                elevation=0,
+                elevation_on_scroll=1,
+                toolbar_height=60,
+                title_text_style=ft.TextStyle(
+                    size=20, weight=ft.FontWeight.W_600, color=scheme.on_surface
+                ),
+            ),
+            card_theme=ft.CardTheme(
+                color=scheme.surface_container_lowest,
+                elevation=0,
+                shape=ft.RoundedRectangleBorder(radius=8),
+                margin=0,
+            ),
+            navigation_bar_theme=ft.NavigationBarTheme(
+                bgcolor=scheme.surface_container_lowest,
+                indicator_color=scheme.primary_container,
+                height=68,
+                label_text_style={
+                    ft.ControlState.SELECTED: ft.TextStyle(
+                        size=12,
+                        weight=ft.FontWeight.W_600,
+                        color=scheme.on_surface,
+                    ),
+                    ft.ControlState.DEFAULT: ft.TextStyle(
+                        size=12,
+                        weight=ft.FontWeight.W_500,
+                        color=scheme.on_surface_variant,
+                    ),
+                },
+                indicator_shape=ft.RoundedRectangleBorder(radius=6),
+            ),
+            filled_button_theme=ft.FilledButtonTheme(style=PlotApplication._button_style(True)),
+            outlined_button_theme=ft.OutlinedButtonTheme(style=PlotApplication._button_style()),
+            icon_theme=ft.IconTheme(color=scheme.on_surface_variant),
+            text_theme=text_theme,
+            primary_text_theme=text_theme,
+        )
+
     def build(self):
         self.page.title = APP_NAME
         self.page.fonts = {"NotoSansSC": "fonts/NotoSansSC-VF.ttf"}
-        self.page.theme = ft.Theme(
-            color_scheme_seed="#00798c",
-            font_family="NotoSansSC",
-        )
-        self.page.dark_theme = ft.Theme(
-            color_scheme_seed="#edae49",
-            font_family="NotoSansSC",
-        )
+        self.page.theme = self._theme()
+        self.page.dark_theme = self._theme(dark=True)
+        self.page.theme_mode = ft.ThemeMode.LIGHT
         self.page.window.width = 1024
         self.page.window.height = 720
         self.page.window.min_width = 360
         self.page.window.min_height = 560
         self.page.padding = ft.Padding.all(0)
+        self.app_title = ft.Text(
+            key=f"app-title-{'dark' if self.dark_mode else 'light'}",
+            value=APP_NAME,
+            style=self._text_style(size=20, weight=ft.FontWeight.W_600),
+        )
         self.page.appbar = ft.AppBar(
-            title=ft.Text(APP_NAME, weight=ft.FontWeight.W_600),
-            bgcolor=ft.Colors.SURFACE_CONTAINER,
+            title=self.app_title,
             actions=[
                 ft.IconButton(
                     icon=ft.Icons.UPLOAD_FILE,
@@ -291,16 +479,7 @@ class PlotApplication:
                     tooltip="保存工程",
                     on_click=self.save_project,
                 ),
-                ft.IconButton(
-                    icon=ft.Icons.PLAY_ARROW,
-                    tooltip="绘图",
-                    on_click=self.draw_chart,
-                ),
-                ft.IconButton(
-                    icon=ft.Icons.DOWNLOAD,
-                    tooltip="导出图像",
-                    on_click=self.show_export_dialog,
-                ),
+                self.theme_button,
             ],
         )
         self.views = [
@@ -309,9 +488,19 @@ class PlotApplication:
             self._settings_view(),
             self._fit_view(),
         ]
-        self.content_host = ft.Container(content=self.views[0], expand=True, padding=12)
-        self.page.navigation_bar = ft.NavigationBar(
-            selected_index=0,
+        self.content_host = ft.Container(
+            content=self.views[0],
+            expand=True,
+            padding=ft.Padding.symmetric(horizontal=16, vertical=14),
+            alignment=ft.Alignment.TOP_CENTER,
+        )
+        self.page.navigation_bar = self._navigation_bar()
+        self.page.add(self.content_host)
+
+    def _navigation_bar(self, selected_index: int = 0):
+        return ft.NavigationBar(
+            key=f"navigation-{'dark' if self.dark_mode else 'light'}",
+            selected_index=selected_index,
             on_change=self.change_view,
             destinations=[
                 ft.NavigationBarDestination(icon=ft.Icons.TABLE_CHART_OUTLINED, label="数据"),
@@ -320,35 +509,87 @@ class PlotApplication:
                 ft.NavigationBarDestination(icon=ft.Icons.FUNCTIONS, label="拟合"),
             ],
         )
-        self.page.add(self.content_host)
 
-    def _section_title(self, title: str, subtitle: str = ""):
-        controls = [ft.Text(title, size=18, weight=ft.FontWeight.W_600)]
+    def _section_title(self, icon, title: str, subtitle: str = ""):
+        title_control = ft.Text(
+            key=f"section-{title}-{'dark' if self.dark_mode else 'light'}",
+            value=title,
+            style=self._text_style(size=20, weight=ft.FontWeight.W_600),
+        )
+        text_controls = [title_control]
         if subtitle:
-            controls.append(ft.Text(subtitle, size=12, color=ft.Colors.ON_SURFACE_VARIANT))
-        return ft.Column(controls, spacing=2)
+            text_controls.append(ft.Text(subtitle, size=12, color=ft.Colors.ON_SURFACE_VARIANT))
+        return ft.Row(
+            [
+                ft.Container(
+                    content=ft.Icon(icon, size=22, color=PRIMARY),
+                    width=40,
+                    height=40,
+                    alignment=ft.Alignment.CENTER,
+                    bgcolor=ft.Colors.PRIMARY_CONTAINER,
+                    border_radius=6,
+                ),
+                ft.Column(text_controls, spacing=2, expand=True),
+            ],
+            spacing=12,
+        )
 
     def _draw_button(self, label: str = "绘图"):
         return ft.FilledButton(
             content=ft.Text(label),
             icon=ft.Icons.PLAY_ARROW,
             on_click=self.draw_chart,
+            style=self._button_style(True),
         )
+
+    def _y_curves_title(self):
+        control = ft.Text(
+            key=f"curves-title-{'dark' if self.dark_mode else 'light'}",
+            value="Y 轴曲线",
+            style=self._text_style(size=16, weight=ft.FontWeight.W_600),
+        )
+        return control
+
+    def toggle_theme(self, _):
+        self.sync_form()
+        self.dark_mode = not self.dark_mode
+        selected_index = self.page.navigation_bar.selected_index or 0
+        self.page.theme_mode = ft.ThemeMode.DARK if self.dark_mode else ft.ThemeMode.LIGHT
+        self.theme_button.icon = ft.Icons.LIGHT_MODE_OUTLINED if self.dark_mode else ft.Icons.DARK_MODE_OUTLINED
+        self.theme_button.tooltip = "切换浅色模式" if self.dark_mode else "切换深色模式"
+        self.page.update()
+        self.app_title = ft.Text(
+            key=f"app-title-{'dark' if self.dark_mode else 'light'}",
+            value=APP_NAME,
+            style=self._text_style(size=20, weight=ft.FontWeight.W_600),
+        )
+        self.page.appbar.title = self.app_title
+        self.page.navigation_bar = self._navigation_bar(selected_index)
+        self._rebuild_curve_editors()
+        self.views = [
+            self._data_view(),
+            self._chart_view(),
+            self._settings_view(),
+            self._fit_view(),
+        ]
+        self.content_host.content = self.views[selected_index]
+        self.page.update()
 
     def _data_view(self):
         return ft.ListView(
             controls=[
-                self._section_title("实验数据", "所有数值使用逗号分隔，不确定度可填单值或逐点列表"),
+                self._section_title(ft.Icons.TABLE_CHART_OUTLINED, "实验数据", "所有数值使用逗号分隔，不确定度可填单值或逐点列表"),
                 self.x_data,
                 self.x_uncertainty,
                 ft.Divider(),
                 ft.Row(
                     [
-                        ft.Text("Y 轴曲线", size=16, weight=ft.FontWeight.W_600),
-                        ft.Button(
+                        self._y_curves_title(),
+                        ft.OutlinedButton(
                             content=ft.Text("添加曲线"),
                             icon=ft.Icons.ADD,
                             on_click=self.add_curve,
+                            style=self._button_style(),
                         ),
                     ],
                     alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
@@ -357,8 +598,8 @@ class PlotApplication:
                 ft.Container(height=4),
                 self._draw_button(),
             ],
-            spacing=12,
-            padding=ft.Padding.only(bottom=12),
+            spacing=16,
+            padding=ft.Padding.only(bottom=16),
             expand=True,
         )
 
@@ -367,26 +608,37 @@ class PlotApplication:
             [
                 ft.Row(
                     [
-                        self._section_title("图表预览"),
-                        ft.FilledButton(
-                            content=ft.Text("重新绘图"),
-                            icon=ft.Icons.REFRESH,
-                            on_click=self.draw_chart,
+                        self._section_title(ft.Icons.SHOW_CHART, "图表预览"),
+                        ft.Row(
+                            [
+                                ft.IconButton(
+                                    icon=ft.Icons.REFRESH,
+                                    tooltip="重新绘图",
+                                    on_click=self.draw_chart,
+                                ),
+                                ft.IconButton(
+                                    icon=ft.Icons.DOWNLOAD,
+                                    tooltip="导出图像",
+                                    on_click=self.show_export_dialog,
+                                ),
+                            ],
+                            spacing=2,
                         ),
                     ],
                     alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                 ),
                 self.preview_host,
-                self.status,
+                ft.Row([ft.Icon(ft.Icons.INFO_OUTLINE, size=16), self.status], spacing=6),
             ],
             spacing=10,
+            horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
             expand=True,
         )
 
     def _settings_view(self):
         return ft.ListView(
             controls=[
-                self._section_title("图表设置"),
+                self._section_title(ft.Icons.TUNE, "图表设置", "调整标题、坐标轴与显示方式"),
                 self.title,
                 self.note,
                 ft.ResponsiveRow([self.x_label, self.x_unit], spacing=8, run_spacing=8),
@@ -411,24 +663,25 @@ class PlotApplication:
                 ),
                 self._draw_button(),
             ],
-            spacing=12,
-            padding=ft.Padding.only(bottom=12),
+            spacing=16,
+            padding=ft.Padding.only(bottom=16),
             expand=True,
         )
 
     def _fit_view(self):
         return ft.Column(
             [
-                self._section_title("拟合参数与质量"),
+                self._section_title(ft.Icons.FUNCTIONS, "拟合参数与质量", "显示拟合方程、参数、R² 与相关系数"),
                 ft.Container(
                     content=ft.ListView([self.fit_results], padding=12, expand=True),
                     expand=True,
-                    bgcolor=ft.Colors.SURFACE_CONTAINER_LOW,
+                    bgcolor=ft.Colors.SURFACE_CONTAINER_LOWEST,
                     border=ft.Border.all(1, ft.Colors.OUTLINE_VARIANT),
                     border_radius=6,
                 ),
             ],
             spacing=10,
+            horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
             expand=True,
         )
 

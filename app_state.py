@@ -23,14 +23,14 @@ from project_io import CurveProject, ProjectState, load_project, save_project
 
 
 CURVE_COLORS = (
-    "#d1495b",
-    "#00798c",
-    "#edae49",
-    "#30638e",
-    "#2a9d8f",
-    "#6d597a",
-    "#ef476f",
-    "#118ab2",
+    "#0072B2",
+    "#D55E00",
+    "#009E73",
+    "#CC79A7",
+    "#E69F00",
+    "#6A51A3",
+    "#4D4D4D",
+    "#56B4E9",
 )
 CURVE_MARKERS = ("o", "s", "^", "D", "v", "P", "X", "*")
 FIT_NAMES = {

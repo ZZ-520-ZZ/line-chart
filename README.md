@@ -96,6 +96,8 @@ Windows、Android 和旧 Tkinter 界面使用同一种 `.pplot` 格式。
 
 ## 自动化测试
 
+仓库已配置 GitHub Actions。每次提交和 Pull Request 都会在 Windows 与 Ubuntu、Python 3.12 环境中自动运行 27 项单元/回归测试及三组真实绘图测试，并保存生成的测试图像作为构建产物。
+
 运行完整测试套件：
 
 ```powershell

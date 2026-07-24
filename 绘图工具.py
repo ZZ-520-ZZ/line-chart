@@ -1,5 +1,6 @@
 # coding: utf-8
 import tkinter as tk
+import sys
 from tkinter import ttk, messagebox, filedialog, colorchooser
 from tkinter import scrolledtext
 import matplotlib.pyplot as plt
@@ -99,8 +100,46 @@ class PhysicsPlotTool:
         self.root.minsize(800, 600)
 
         self.style = ttk.Style()
-        self.style.theme_use('default')
-        self.style.configure('TRadiobutton', indicatoron=1)
+        themes = self.style.theme_names()
+        theme_name = 'vista' if sys.platform == 'win32' and 'vista' in themes else 'clam'
+        self.style.theme_use(theme_name)
+        ui_font = 'Microsoft YaHei UI' if sys.platform == 'win32' else 'Noto Sans CJK SC'
+        self.root.option_add('*Font', (ui_font, 9))
+        self.root.configure(background='#f4f7f6')
+        self.style.configure('TFrame', background='#f4f7f6')
+        self.style.configure('TLabel', background='#f4f7f6', foreground='#18201f')
+        self.style.configure('TButton', padding=(9, 5), font=(ui_font, 9))
+        if theme_name == 'vista':
+            self.style.configure(
+                'Accent.TButton', padding=(10, 6), font=(ui_font, 9, 'bold'),
+                foreground='#006b68')
+            self.style.map(
+                'Accent.TButton',
+                foreground=[('disabled', '#7b8583'), ('pressed', '#004d4a'),
+                            ('active', '#005b58'), ('!disabled', '#006b68')])
+        else:
+            self.style.configure(
+                'Accent.TButton', padding=(10, 6), font=(ui_font, 9, 'bold'),
+                foreground='white', background='#006b68')
+            self.style.map(
+                'Accent.TButton',
+                foreground=[('disabled', '#7b8583'), ('!disabled', 'white')],
+                background=[('pressed', '#004d4a'), ('active', '#005b58'),
+                            ('!disabled', '#006b68')])
+        self.style.configure('TLabelframe', background='#f4f7f6', padding=6)
+        self.style.configure(
+            'TLabelframe.Label', background='#f4f7f6', foreground='#18201f',
+            font=(ui_font, 9, 'bold'))
+        self.style.configure('TNotebook', background='#f4f7f6', borderwidth=0)
+        self.style.configure('TNotebook.Tab', padding=(12, 7), font=(ui_font, 9))
+        self.style.map(
+            'TNotebook.Tab',
+            foreground=[('selected', '#006b68')],
+            background=[('selected', '#ffffff'), ('!selected', '#e8eeec')])
+        self.style.configure('TEntry', padding=4)
+        self.style.configure('TCombobox', padding=3)
+        self.style.configure('TRadiobutton', background='#f4f7f6', indicatoron=1)
+        self.style.configure('TCheckbutton', background='#f4f7f6')
 
         self.fig = Figure(figsize=(8, 5), dpi=100)
         self.ax = self.fig.add_subplot(111)
@@ -366,10 +405,6 @@ class PhysicsPlotTool:
         preview_frame.pack(fill=tk.X, padx=10, pady=10)
         self.preview_text = scrolledtext.ScrolledText(preview_frame, width=40, height=3, font=('Arial', 10))
         self.preview_text.pack(fill=tk.X)
-
-        self.style.map('Accent.TButton',
-                       background=[('active', '#1a73e8'), ('pressed', '#1557b0')],
-                       foreground=[('active', 'white'), ('pressed', 'white')])
 
     def setup_fit_tab(self):
         toolbar = ttk.Frame(self.tab_fit)
