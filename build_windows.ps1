@@ -16,7 +16,7 @@ if (-not (Test-Path $flet)) {
     --add-data "assets:assets" `
     --product-name $productName `
     --file-description "Physics experiment plotting and fitting tool" `
-    --company-name "ZZ-520-ZZ" `
+    --company-name "ZivSpectra" `
     --yes
 
 if ($LASTEXITCODE -ne 0) {

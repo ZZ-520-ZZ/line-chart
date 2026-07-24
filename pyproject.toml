@@ -14,7 +14,7 @@ dependencies = [
 [tool.flet]
 org = "com.zz520zz"
 product = "Plotforge"
-company = "ZZ-520-ZZ"
+company = "ZivSpectra"
 description = "物理实验数据、误差棒与拟合绘图工具"
 android_adaptive_icon_background = "#081D34"
 splash_color = "#081D34"
